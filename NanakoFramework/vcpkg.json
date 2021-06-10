@@ -1,0 +1,14 @@
+{
+  "name": "NanakoFramework",
+  "version-string": "1.0.0",
+  "description": "An addon for Custom Nanako Framework",
+  "homepage": "https://github.com/jarari/CommonLibF4/NanakoFramework",
+  "license": "MIT",
+  "dependencies": [
+    "boost-iostreams",
+    "boost-iterator",
+    "boost-predef",
+    "boost-stl-interfaces",
+    "spdlog"
+  ]
+}
