@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # ---- Options ----
 
-option(COPY_BUILD "Copy the build output to the Fallout 4 directory." ON)
+option(COPY_BUILD "Copy the build output to the Fallout 4 directory." OFF)
 
 # ---- Cache build vars ----
 
@@ -11,7 +11,7 @@ if (NOT DEFINED VCPKG_ROOT AND DEFINED ENV{VCPKG_ROOT})
 endif ()
 
 if (DEFINED VCPKG_ROOT)
-	set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+	set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 	set(VCPKG_TARGET_TRIPLET "x64-windows-static-md" CACHE STRING "")
 else ()
 	message(
@@ -63,12 +63,6 @@ function (conditionally_add_subdirectory SRC_DIR)
 	endif ()
 endfunction ()
 
-conditionally_add_subdirectory(AddressLibDecoder)
-conditionally_add_subdirectory(AddressLibGen)
 conditionally_add_subdirectory(CommonLibF4)
-conditionally_add_subdirectory(ExampleProject)
-conditionally_add_subdirectory(F4SEStub/runtime f4se_runtime)
-conditionally_add_subdirectory(F4SEStub/loader f4se_loader)
-conditionally_add_subdirectory(F4SEStub/steam_loader f4se_steam_loader)
-conditionally_add_subdirectory(RTTIDump)
-conditionally_add_subdirectory(Tests)
+conditionally_add_subdirectory(NanakoFramework)
+conditionally_add_subdirectory(DoomFist)
