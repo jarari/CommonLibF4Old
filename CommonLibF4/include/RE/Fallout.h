@@ -3,6 +3,7 @@
 #include "F4SE/Impl/PCH.h"
 
 #include "RE/Bethesda/AITimeStamp.h"
+#include "RE/Bethesda/ActiveEffect.h"
 #include "RE/Bethesda/Actor.h"
 #include "RE/Bethesda/ActorValueInfo.h"
 #include "RE/Bethesda/Atomic.h"
