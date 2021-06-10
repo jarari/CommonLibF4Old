@@ -12,6 +12,7 @@ set(headers ${headers}
 	include/RE/RTTI.h
 	include/RE/RTTI_IDs.h
 	include/RE/VTABLE_IDs.h
+	include/RE/Bethesda/ActiveEffect.h
 	include/RE/Bethesda/Actor.h
 	include/RE/Bethesda/ActorValueInfo.h
 	include/RE/Bethesda/AITimeStamp.h

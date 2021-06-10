@@ -365,7 +365,8 @@ namespace RE
 		kGDRY,  // 9D GDRY X BGSGodRays
 		kOVIS,  // 9E OVIS
 
-		kTotal
+		kTotal,
+		kActiveEffect = 163
 	};
 
 	enum class _D3DBLEND;    // NOLINT(bugprone-reserved-identifier)
