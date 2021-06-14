@@ -1,0 +1,14 @@
+{
+  "name": "ShieldFramework",
+  "version-string": "1.0.0",
+  "description": "ShieldFramework plugin created using CommonLibF4",
+  "homepage": "https://github.com/jarari/CommonLibF4/ShieldFramework",
+  "license": "MIT",
+  "dependencies": [
+    "boost-iostreams",
+    "boost-iterator",
+    "boost-predef",
+    "boost-stl-interfaces",
+    "spdlog"
+  ]
+}
