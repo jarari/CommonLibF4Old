@@ -64,8 +64,8 @@ struct ShieldData {
 
 using std::unordered_map;
 using std::vector;
-ptrdiff_t ProcessProjectileFX_PatchOffset = 0x451;
-REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(926879), ProcessProjectileFX_PatchOffset };
+ptrdiff_t ProcessProjectileFX_PatchOffset = 0x1A1;
+REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(806412), ProcessProjectileFX_PatchOffset };
 unordered_map<Actor*, BGSMaterialType*> originalMaterialMap;
 static unordered_map<uint32_t, vector<std::string>> shieldPartsMap;
 static unordered_map<uint32_t, vector<ShieldData>> shieldDataMap;
@@ -231,7 +231,6 @@ public:
 				}
 				if (!weapid)
 					continue;
-				logger::warn(_MESSAGE("weapid %llx", weapid));
 				if (it->colObj.get()) {
 					auto partslookup = shieldPartsMap.find(weapid);
 					if (partslookup == shieldPartsMap.end())
@@ -248,16 +247,15 @@ public:
 						if (parent->name == parts[i]) {
 							if (shielddata[i].material) {
 								it->materialType = shielddata[i].material;
-								logger::warn(_MESSAGE("Material Type %s", shielddata[i].material->materialName.c_str()));
 							}
 							if (shielddata[i].spell) {
-								//this->spell = shielddata[i].spell;
 								shielddata[i].spell->Cast(this->shooter.get().get(), a);
-								logger::warn(_MESSAGE("Spell %s", shielddata[i].spell->GetFullName()));
 							}
-							logger::warn(_MESSAGE("Damage %f vs %f", this->damage, shielddata[i].damageThreshold));
 							if (shielddata[i].damageThreshold <= 0 || this->damage < shielddata[i].damageThreshold) {
 								this->damage = 0.0f;
+								if (this->IsBeamProjectile()) {
+									((BeamProjectile*)this)->dealtDamage = 0.0f;
+								}
 							}
 						}
 					}
@@ -279,6 +277,8 @@ protected:
 unordered_map<uint64_t, ProjectileHooks::FnProcessImpacts> ProjectileHooks::fnHash;
 
 TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
+	if (!modname.length() || !formid)
+		return nullptr;
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	TESFile* modFile = nullptr;
 	for (auto it = dh->files.begin(); it != dh->files.end(); ++it) {
@@ -292,7 +292,6 @@ TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
 		return nullptr;
 	uint8_t modIndex = modFile->compileIndex;
 	uint32_t id = formid;
-	logger::warn(_MESSAGE("Mod name %s", modname.c_str()));
 	if (modIndex < 0xFE) {
 		id |= ((uint32_t)modIndex) << 24;
 	}
@@ -302,7 +301,6 @@ TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
 			id |= 0xFE000000 | (uint32_t(lightModIndex) << 12);
 		}
 	}
-	logger::warn(_MESSAGE("Form ID %llx", id));
 	return TESForm::GetFormByID(id);
 }
 
@@ -340,14 +338,11 @@ SpellItem* GetSpellByFullName(std::string spellname) {
 	return nullptr;
 }
 
-void InitializeJSONData() {
+void InitializeShieldData() {
 	namespace fs = std::filesystem;
 	fs::path jsonPath = fs::current_path();
-	jsonPath += "\\Data\\F4SE\\Plugins\\ShieldFramework";
+	jsonPath += "\\Data\\F4SE\\Plugins\\ShieldFramework\\ShieldData";
 	std::stringstream stream;
-	stream << jsonPath.string();
-	logger::warn(_MESSAGE("Filepath %s", stream.str().c_str()));
-	stream.str(std::string());
 	fs::directory_entry jsonEntry{ jsonPath };
 	if (!jsonEntry.exists()) {
 		logger::warn("Shield Data directory does not exist!"sv);
@@ -356,7 +351,7 @@ void InitializeJSONData() {
 	for (auto& it : fs::directory_iterator(jsonEntry)) {
 		if (it.path().extension().compare(".json") == 0) {
 			stream << it.path().filename();
-			logger::warn(_MESSAGE("Loading json %s", stream.str().c_str()));
+			logger::warn(_MESSAGE("Loading shield data %s", stream.str().c_str()));
 			stream.str(std::string());
 			std::ifstream reader;
 			reader.open(it.path());
@@ -367,37 +362,206 @@ void InitializeJSONData() {
 				for (auto formit = (*modit).begin(); formit != (*modit).end(); ++formit) {
 					TESForm* shieldForm = GetFormFromMod(modit.key(), std::stoi(formit.key(), 0, 16));
 					uint32_t formid = shieldForm->formID;
-					vector<std::string> parts;
-					vector<ShieldData> shielddata;
-					for (auto partit = (*formit).begin(); partit != (*formit).end(); ++partit) {
-						parts.push_back(partit.key());
-						logger::warn(_MESSAGE("Part %s", partit.key().c_str()));
+					if (shieldPartsMap.find(formid) == shieldPartsMap.end()) {
+						vector<std::string> parts;
+						vector<ShieldData> shielddata;
+						for (auto partit = (*formit).begin(); partit != (*formit).end(); ++partit) {
+							parts.push_back(partit.key());
 
-						ShieldData sd;
-						auto lookup = (*partit).find("MaterialType");
-						if (lookup != (*partit).end()) {
-							sd.material = GetMaterialTypeByName(lookup.value().get<std::string>());
-							logger::warn(_MESSAGE("MaterialType %llx", sd.material));
+							ShieldData sd;
+							auto lookup = (*partit).find("MaterialType");
+							if (lookup != (*partit).end()) {
+								sd.material = GetMaterialTypeByName(lookup.value().get<std::string>());
+							}
+							lookup = (*partit).find("Spell");
+							if (lookup != (*partit).end()) {
+								std::string spellName = lookup.value().get<std::string>();
+								if (spellName.length() > 0) {
+									sd.spell = GetSpellByFullName(spellName);
+								}
+							}
+							lookup = (*partit).find("DamageThreshold");
+							if (lookup != (*partit).end()) {
+								sd.damageThreshold = lookup.value().get<float>();
+							}
+							shielddata.push_back(sd);
 						}
-						lookup = (*partit).find("Spell");
-						if (lookup != (*partit).end()) {
-							sd.spell = GetSpellByFullName(lookup.value().get<std::string>());
-							logger::warn(_MESSAGE("Spell %llx", sd.spell));
-						}
-						lookup = (*partit).find("DamageThreshold");
-						if (lookup != (*partit).end()) {
-							sd.damageThreshold = lookup.value().get<float>();
-							logger::warn(_MESSAGE("DamageThreshold %f", sd.damageThreshold));
-						}
-						shielddata.push_back(sd);
+						shieldPartsMap.insert(std::pair<uint32_t, vector<std::string>>(formid, parts));
+						shieldDataMap.insert(std::pair<uint32_t, vector<ShieldData>>(formid, shielddata));
 					}
-					shieldPartsMap.insert(std::pair<uint32_t, vector<std::string>>(formid, parts));
-					shieldDataMap.insert(std::pair<uint32_t, vector<ShieldData>>(formid, shielddata));
 				}
 			}
 		}
 	}
 }
+
+void InitializeImpactData() {
+	namespace fs = std::filesystem;
+	fs::path jsonPath = fs::current_path();
+	jsonPath += "\\Data\\F4SE\\Plugins\\ShieldFramework\\ImpactData";
+	std::stringstream stream;
+	fs::directory_entry jsonEntry{ jsonPath };
+	if (!jsonEntry.exists()) {
+		logger::warn("ImpactData directory does not exist!"sv);
+		return;
+	}
+	BGSImpactDataSet* bullet_normal = (BGSImpactDataSet*)TESForm::GetFormByID(0x004B37);
+	BGSImpactDataSet* bullet_heavy = (BGSImpactDataSet*)TESForm::GetFormByID(0x05DDEE);
+	BGSImpactDataSet* bullet_explosive = (BGSImpactDataSet*)TESForm::GetFormByID(0x21C79C);
+	BGSImpactDataSet* bullet_noparallax = (BGSImpactDataSet*)TESForm::GetFormByID(0x22CC14);
+	BGSImpactDataSet* bullet_incendiary = (BGSImpactDataSet*)TESForm::GetFormByID(0x1B5EE6);
+	BGSImpactDataSet* bullet_cryo = (BGSImpactDataSet*)TESForm::GetFormByID(0x06F11F);
+	BGSImpactDataSet* flamethrower = (BGSImpactDataSet*)TESForm::GetFormByID(0x0D76F5);
+	logger::warn(_MESSAGE("Bullet Impact Data Set %llx", bullet_normal));
+	for (auto& it : fs::directory_iterator(jsonEntry)) {
+		if (it.path().extension().compare(".json") == 0) {
+			stream << it.path().filename();
+			logger::warn(_MESSAGE("Loading impact data %s", stream.str().c_str()));
+			stream.str(std::string());
+			std::ifstream reader;
+			reader.open(it.path());
+			nlohmann::json j;
+			reader >> j;
+
+			for (auto typeit = j.begin(); typeit != j.end(); ++typeit) {
+				if (typeit.key() == "Normal") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(), 
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_normal->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "Heavy") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_heavy->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "Explosive") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_explosive->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "NoParallax") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_noparallax->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "Incendiary") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_incendiary->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "Cryo") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							bullet_cryo->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+				else if (typeit.key() == "FlameThrower") {
+					for (auto impactit = (*typeit).begin(); impactit != (*typeit).end(); ++impactit) {
+						auto matlookup = impactit.value().find("MaterialType");
+						if (matlookup == impactit.value().end())
+							continue;
+						auto ipctlookup = impactit.value().find("Impact");
+						if (ipctlookup == impactit.value().end())
+							continue;
+						std::string matname = matlookup.value().get<std::string>();
+						if (matname.length() == 0)
+							continue;
+						BGSMaterialType* mat = GetMaterialTypeByName(matlookup.value().get<std::string>());
+						BGSImpactData* ipct = (BGSImpactData*)GetFormFromMod((*ipctlookup.value().find("Mod")).get<std::string>(),
+																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
+						if (mat && ipct) {
+							flamethrower->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 
 void InitializeFramework() {
 	uint64_t addr;
@@ -436,8 +600,8 @@ void InitializeFramework() {
 		ProjectileHooks::HookProcessImpacts(addr, offset);
 	}
 
-	//Fallout4.exe+0FD55F0 is the function that plays the impact effect based on various impact data.
-	//0x451 from this function is the part where it checks the form type of collidee and play the impact effect based on the race data.
+	//Fallout4.exe+0xFD58A0 is the function that plays the impact effect based on various impact data.
+	//0x1A1 from this function is the part where it checks the form type of collidee and play the impact effect based on the race data.
 	//This will modify that behavior, forcing the game to always use the projectile impact data's materialType for the impact effect.
 	logger::warn(_MESSAGE("Patching impact form type check %llx", ProcessProjectileFX.address()));
 	REL::safe_write(ProcessProjectileFX.address(), (uint8_t)0xEB);
@@ -493,15 +657,16 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 
 	const F4SE::MessagingInterface* message = F4SE::GetMessagingInterface();
 	message->RegisterListener([](F4SE::MessagingInterface::Message* msg) -> void {
-		if (msg->type == F4SE::MessagingInterface::kGameDataReady) {
-			InitializeJSONData();
+		if (msg->type == F4SE::MessagingInterface::kGameLoaded) {
+			InitializeShieldData();
+			InitializeImpactData();
 			InitializeFramework();
-		}
-		else if (msg->type == F4SE::MessagingInterface::kGameLoaded) {
-			HitEventSource* src = HitEventSource::GetSingleton();
+
+			/*HitEventSource* src = HitEventSource::GetSingleton();
 			logger::warn(_MESSAGE("HitEventSource %llx", src));
 			HitEventSink* sink = new HitEventSink();
-			src->RegisterSink(sink);
+			src->RegisterSink(sink);*/
+
 		}
 	});
 	return true;
