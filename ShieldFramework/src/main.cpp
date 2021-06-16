@@ -1,5 +1,9 @@
 #include <Windows.h>
+#include <fstream>
+#include <iostream>
 #include <unordered_map>
+#include "nlohmann/json.hpp"
+
 char tempbuf[8192] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
 	va_list args;
@@ -52,9 +56,19 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 	return olddata;
 }
 
+struct ShieldData {
+	BGSMaterialType* material = nullptr;
+	SpellItem* spell = nullptr;
+	float damageThreshold = 0.0f;
+};
+
 using std::unordered_map;
-//static BGSKeyword* shieldKeyword;
-static BGSMaterialType* shieldMaterial;
+using std::vector;
+ptrdiff_t ProcessProjectileFX_PatchOffset = 0x451;
+REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(926879), ProcessProjectileFX_PatchOffset };
+unordered_map<Actor*, BGSMaterialType*> originalMaterialMap;
+static unordered_map<uint32_t, vector<std::string>> shieldPartsMap;
+static unordered_map<uint32_t, vector<ShieldData>> shieldDataMap;
 static unordered_map<TESObjectREFR*, bhkNPCollisionObject*> shieldCollisionObjects;
 
 //POSTPONED:Is it possible to check if the actor/collision object still exists?
@@ -117,11 +131,6 @@ struct __TESHitEvent {
 	TESObjectREFR* victim; //0x00E0 
 };
 
-using std::vector;
-ptrdiff_t ProcessProjectileFX_PatchOffset = 0x451;
-REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(926879), ProcessProjectileFX_PatchOffset };
-unordered_map<Actor*, BGSMaterialType*> materialTypeMap;
-
 //I found this address using PlayerCharacter's BSTEventSink<TESHitEvent>
 class HitEventSource : public BSTEventSource<_TESHitEvent> {
 public:
@@ -139,27 +148,30 @@ public:
 class HitEventSink : public BSTEventSink<_TESHitEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const _TESHitEvent& a_event, BSTEventSource<_TESHitEvent>* a_source) override {
-		if ((a_event.unk_1C == 0 || a_event.unk_2C == 0) && a_event.weapon && a_event.weaponInstance) {
-			logger::warn("Hit event fired"sv);
+		/*if ((a_event.unk_1C == 0 || a_event.unk_2C == 0) && a_event.weapon && a_event.weaponInstance) {
 			if (a_event.victim && a_event.victim->formType == ENUM_FORM_ID::kACHR) {
 				Actor* a = (Actor*)a_event.victim;
 				//Detect melee hits and swap material for a while.
 				//I don't think it works though, since the sound effect plays before the hit event happens.
 				if (a_event.attackData && a_event.colObj) {
 					NiAVObject* parent = a_event.colObj->sceneObject;
-					if (parent && strcmp(parent->name.c_str(), "ShieldFramework") == 0) {
-						materialTypeMap.insert(std::pair<Actor*, BGSMaterialType*>(a, a->race->bloodImpactMaterial));
-						a->race->bloodImpactMaterial = shieldMaterial;
+					if (parent && strcmp(parent->name.c_str(), "ShieldFramework_Metal") == 0) {
+						originalMaterialMap.insert(std::pair<Actor*, BGSMaterialType*>(a, a->race->bloodImpactMaterial));
+						a->race->bloodImpactMaterial = shieldMaterialMetal;
+					}
+					else if (parent && strcmp(parent->name.c_str(), "ShieldFramework_Glass") == 0) {
+						originalMaterialMap.insert(std::pair<Actor*, BGSMaterialType*>(a, a->race->bloodImpactMaterial));
+						a->race->bloodImpactMaterial = shieldMaterialGlass;
 					}
 				}
 				else {
-					auto lookup = materialTypeMap.find(a);
-					if (lookup != materialTypeMap.end()) {
+					auto lookup = originalMaterialMap.find(a);
+					if (lookup != originalMaterialMap.end()) {
 						a->race->bloodImpactMaterial = lookup->second;
 					}
 				}
 			}
-		}
+		}*/
 		return BSEventNotifyControl::kContinue;
 	}
 	HitEventSink() {};
@@ -174,13 +186,9 @@ public:
 
 	bool CheckShield() {
 		for (auto it = this->impacts.begin(); it != this->impacts.end(); ++it) {
-			if (it->colObj.get()) {
-				logger::warn(_MESSAGE("colObj %llx", it->colObj.get()));
-			}
 			if (it->processed)
 				continue;
 			if (it->collidee.get() && it->collidee.get()->GetFormType() == ENUM_FORM_ID::kACHR) {
-				//Do we even need to check the keyword??? I don't think so
 				/*Actor* a = (Actor*)it->collidee.get().get();
 				if (!a || !a->currentProcess || !a->currentProcess->middleHigh)
 					continue;
@@ -210,11 +218,48 @@ public:
 				}*/
 
 				//if (found) {
+				Actor* a = (Actor*)it->collidee.get().get();
+				if (!a || !a->currentProcess || !a->currentProcess->middleHigh)
+					continue;
+				BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
+				uint32_t weapid = 0;
+				for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
+					if (eqit->equipIndex.index == 0 && eqit->item.instanceData.get()) {
+						weapid = eqit->item.object->formID;
+						break;
+					}
+				}
+				if (!weapid)
+					continue;
+				logger::warn(_MESSAGE("weapid %llx", weapid));
 				if (it->colObj.get()) {
+					auto partslookup = shieldPartsMap.find(weapid);
+					if (partslookup == shieldPartsMap.end())
+						continue;
+					vector<std::string> parts = partslookup->second;
+					auto datalookup = shieldDataMap.find(weapid);
+					vector<ShieldData> shielddata = datalookup->second;
+
 					NiAVObject* parent = it->colObj.get()->sceneObject;
-					if (parent && strcmp(parent->name.c_str(), "ShieldFramework") == 0) {
-						it->materialType = shieldMaterial;
-						this->damage = 0.0f;
+					if (!parent)
+						continue;
+
+					for (int i = 0; i < parts.size(); ++i) {
+						if (parent->name == parts[i]) {
+							if (shielddata[i].material) {
+								it->materialType = shielddata[i].material;
+								logger::warn(_MESSAGE("Material Type %s", shielddata[i].material->materialName.c_str()));
+							}
+							if (shielddata[i].spell) {
+								//this->spell = shielddata[i].spell;
+								shielddata[i].spell->Cast(this->shooter.get().get(), a);
+								logger::warn(_MESSAGE("Spell %s", shielddata[i].spell->GetFullName()));
+							}
+							logger::warn(_MESSAGE("Damage %f vs %f", this->damage, shielddata[i].damageThreshold));
+							if (shielddata[i].damageThreshold <= 0 || this->damage < shielddata[i].damageThreshold) {
+								this->damage = 0.0f;
+							}
+						}
 					}
 				}
 				//}
@@ -233,27 +278,130 @@ protected:
 };
 unordered_map<uint64_t, ProjectileHooks::FnProcessImpacts> ProjectileHooks::fnHash;
 
-void InitializeFramework() {
-	uint64_t addr;
-	uint64_t offset = 0x680;
-	const auto& [map, lock] = TESForm::GetAllForms();
-	BSAutoReadLock l{ lock };
-	if (map) {
-		for (auto k = map->begin(); k != map->end(); ++k) {
-			/*if (k->second->formType == ENUM_FORM_ID::kKYWD) {
-				if (strcmp(((BGSKeyword*)(k->second))->GetFormEditorID(), "ShieldFramework") == 0) {
-					shieldKeyword = (BGSKeyword*)k->second;
-					logger::warn(_MESSAGE("Shield Keyword %llx", k->second));
-				}
-			}*/
-			if (k->second->formType == ENUM_FORM_ID::kMATT) {
-				if (strcmp(((BGSMaterialType*)(k->second))->materialName.c_str(), "ActorArmored") == 0) {
-					shieldMaterial = (BGSMaterialType*)k->second;
-					logger::warn(_MESSAGE("Shield Material %llx", k->second));
+TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	TESFile* modFile = nullptr;
+	for (auto it = dh->files.begin(); it != dh->files.end(); ++it) {
+		TESFile* f = *it;
+		if (strcmp(f->filename, modname.c_str()) == 0) {
+			modFile = f;
+			break;
+		}
+	}
+	if (!modFile)
+		return nullptr;
+	uint8_t modIndex = modFile->compileIndex;
+	uint32_t id = formid;
+	logger::warn(_MESSAGE("Mod name %s", modname.c_str()));
+	if (modIndex < 0xFE) {
+		id |= ((uint32_t)modIndex) << 24;
+	}
+	else {
+		uint16_t lightModIndex = modFile->smallFileCompileIndex;
+		if (lightModIndex != 0xFFFF) {
+			id |= 0xFE000000 | (uint32_t(lightModIndex) << 12);
+		}
+	}
+	logger::warn(_MESSAGE("Form ID %llx", id));
+	return TESForm::GetFormByID(id);
+}
+
+BGSMaterialType* GetMaterialTypeByName(std::string materialname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<BGSMaterialType*> materials = dh->GetFormArray<BGSMaterialType>();
+	BSFixedString matname = BSFixedString(materialname);
+	for (auto it = materials.begin(); it != materials.end(); ++it) {
+		if ((*it)->materialName == matname) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+EffectSetting* GetMagicEffectByFullName(std::string effectname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<EffectSetting*> mgefs = dh->GetFormArray<EffectSetting>();
+	for (auto it = mgefs.begin(); it != mgefs.end(); ++it) {
+		if (strcmp((*it)->GetFullName(), effectname.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+SpellItem* GetSpellByFullName(std::string spellname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<SpellItem*> spells = dh->GetFormArray<SpellItem>();
+	for (auto it = spells.begin(); it != spells.end(); ++it) {
+		if (strcmp((*it)->GetFullName(), spellname.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+void InitializeJSONData() {
+	namespace fs = std::filesystem;
+	fs::path jsonPath = fs::current_path();
+	jsonPath += "\\Data\\F4SE\\Plugins\\ShieldFramework";
+	std::stringstream stream;
+	stream << jsonPath.string();
+	logger::warn(_MESSAGE("Filepath %s", stream.str().c_str()));
+	stream.str(std::string());
+	fs::directory_entry jsonEntry{ jsonPath };
+	if (!jsonEntry.exists()) {
+		logger::warn("Shield Data directory does not exist!"sv);
+		return;
+	}
+	for (auto& it : fs::directory_iterator(jsonEntry)) {
+		if (it.path().extension().compare(".json") == 0) {
+			stream << it.path().filename();
+			logger::warn(_MESSAGE("Loading json %s", stream.str().c_str()));
+			stream.str(std::string());
+			std::ifstream reader;
+			reader.open(it.path());
+			nlohmann::json j;
+			reader >> j;
+
+			for (auto modit = j.begin(); modit != j.end(); ++modit) {
+				for (auto formit = (*modit).begin(); formit != (*modit).end(); ++formit) {
+					TESForm* shieldForm = GetFormFromMod(modit.key(), std::stoi(formit.key(), 0, 16));
+					uint32_t formid = shieldForm->formID;
+					vector<std::string> parts;
+					vector<ShieldData> shielddata;
+					for (auto partit = (*formit).begin(); partit != (*formit).end(); ++partit) {
+						parts.push_back(partit.key());
+						logger::warn(_MESSAGE("Part %s", partit.key().c_str()));
+
+						ShieldData sd;
+						auto lookup = (*partit).find("MaterialType");
+						if (lookup != (*partit).end()) {
+							sd.material = GetMaterialTypeByName(lookup.value().get<std::string>());
+							logger::warn(_MESSAGE("MaterialType %llx", sd.material));
+						}
+						lookup = (*partit).find("Spell");
+						if (lookup != (*partit).end()) {
+							sd.spell = GetSpellByFullName(lookup.value().get<std::string>());
+							logger::warn(_MESSAGE("Spell %llx", sd.spell));
+						}
+						lookup = (*partit).find("DamageThreshold");
+						if (lookup != (*partit).end()) {
+							sd.damageThreshold = lookup.value().get<float>();
+							logger::warn(_MESSAGE("DamageThreshold %f", sd.damageThreshold));
+						}
+						shielddata.push_back(sd);
+					}
+					shieldPartsMap.insert(std::pair<uint32_t, vector<std::string>>(formid, parts));
+					shieldDataMap.insert(std::pair<uint32_t, vector<ShieldData>>(formid, shielddata));
 				}
 			}
 		}
 	}
+}
+
+void InitializeFramework() {
+	uint64_t addr;
+	uint64_t offset = 0x680;
 	for (int i = 0; i < 1; ++i) {
 		addr = Projectile::VTABLE[i].address();
 		logger::warn(_MESSAGE("Patching Projectile %llx", addr));
@@ -346,6 +494,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 	const F4SE::MessagingInterface* message = F4SE::GetMessagingInterface();
 	message->RegisterListener([](F4SE::MessagingInterface::Message* msg) -> void {
 		if (msg->type == F4SE::MessagingInterface::kGameDataReady) {
+			InitializeJSONData();
 			InitializeFramework();
 		}
 		else if (msg->type == F4SE::MessagingInterface::kGameLoaded) {
