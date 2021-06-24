@@ -67,6 +67,8 @@ conditionally_add_subdirectory(CommonLibF4)
 conditionally_add_subdirectory(NanakoFramework)
 conditionally_add_subdirectory(DoomFist)
 conditionally_add_subdirectory(ShieldFramework)
+conditionally_add_subdirectory(AVF)
+conditionally_add_subdirectory(DragonBlade)
 
 
 include(FetchContent)
