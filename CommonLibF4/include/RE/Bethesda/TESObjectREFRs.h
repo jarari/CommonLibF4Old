@@ -60,6 +60,7 @@ namespace RE
 	struct BSAnimationGraphEvent {
 		TESObjectREFR* refr;
 		BSFixedString animEvent;
+		BSFixedString argument; //Something like SoundPlay.>>Descriptorname<<
 	};
 	struct BSAnimationUpdateData;
 	struct LOADED_REF_DATA;
