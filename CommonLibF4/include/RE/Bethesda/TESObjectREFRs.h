@@ -57,7 +57,10 @@ namespace RE
 	class WeaponAnimationGraphManagerHolder;
 
 	struct BSActiveGraphIfInactiveEvent;
-	struct BSAnimationGraphEvent;
+	struct BSAnimationGraphEvent {
+		TESObjectREFR* refr;
+		BSFixedString animEvent;
+	};
 	struct BSAnimationUpdateData;
 	struct LOADED_REF_DATA;
 
