@@ -66,10 +66,10 @@ using std::unordered_map;
 using std::vector;
 ptrdiff_t ProcessProjectileFX_PatchOffset = 0x1A1;
 REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(806412), ProcessProjectileFX_PatchOffset };
-static unordered_map<const Actor*, const BGSMaterialType*> originalMaterialMap;
-static unordered_map<const uint32_t, const vector<std::string>> shieldPartsMap;
-static unordered_map<const uint32_t, const vector<ShieldData>> shieldDataMap;
-static unordered_map<const TESObjectREFR*, const bhkNPCollisionObject*> shieldCollisionObjects;
+static unordered_map<Actor*, BGSMaterialType*> originalMaterialMap;
+static unordered_map<uint32_t, vector<std::string>> shieldPartsMap;
+static unordered_map<uint32_t, vector<ShieldData>> shieldDataMap;
+static unordered_map<TESObjectREFR*, bhkNPCollisionObject*> shieldCollisionObjects;
 static ActorValueInfo* damageThresholdAdd;
 static ActorValueInfo* damageThresholdMul;
 
@@ -188,54 +188,53 @@ public:
 
 	bool CheckShield() {
 		for (auto it = this->impacts.begin(); it != this->impacts.end(); ++it) {
-			if (it->processed)
-				continue;
-			if (it->collidee.get() && it->collidee.get()->GetFormType() == ENUM_FORM_ID::kACHR) {
-				Actor* a = (Actor*)it->collidee.get().get();
-				if (!a || !a->currentProcess || !a->currentProcess->middleHigh)
-					continue;
-				BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
-				uint32_t weapid = 0;
-				for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
-					if (eqit->equipIndex.index == 0 && eqit->item.instanceData.get()) {
-						weapid = eqit->item.object->formID;
-						break;
+			if (!it->processed) {
+				if (it->collidee.get() && it->collidee.get()->GetFormType() == ENUM_FORM_ID::kACHR) {
+					Actor* a = (Actor*)it->collidee.get().get();
+					if (a && !a->currentProcess && !a->currentProcess->middleHigh) {
 					}
-				}
-				if (!weapid)
-					continue;
-				if (it->colObj.get()) {
-					auto partslookup = shieldPartsMap.find(weapid);
-					if (partslookup == shieldPartsMap.end())
-						continue;
-					vector<std::string> parts = partslookup->second;
-					auto datalookup = shieldDataMap.find(weapid);
-					vector<ShieldData> shielddata = datalookup->second;
+					BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
+					uint32_t weapid = 0;
+					for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
+						if (eqit->equipIndex.index == 0 && eqit->item.instanceData.get()) {
+							weapid = eqit->item.object->formID;
+							break;
+						}
+					}
+					if (weapid) {
+						if (it->colObj.get()) {
+							auto partslookup = shieldPartsMap.find(weapid);
+							if (partslookup != shieldPartsMap.end()) {
+								vector<std::string> parts = partslookup->second;
+								auto datalookup = shieldDataMap.find(weapid);
+								vector<ShieldData> shielddata = datalookup->second;
 
-					NiAVObject* parent = it->colObj.get()->sceneObject;
-					if (!parent)
-						continue;
-
-					for (int i = 0; i < parts.size(); ++i) {
-						if (parent->name == parts[i]) {
-							if (shielddata[i].material) {
-								it->materialType = shielddata[i].material;
-							}
-							if (shielddata[i].spell) {
-								shielddata[i].spell->Cast(this->shooter.get().get(), a);
-							}
-							float dtAdd = a->GetActorValue(*damageThresholdAdd);
-							float dtMul = a->GetActorValue(*damageThresholdMul);
-							if (shielddata[i].damageThreshold <= 0 || this->damage < (shielddata[i].damageThreshold + dtAdd) * dtMul) {
-								this->damage = 0.0f;
-								if (this->IsBeamProjectile()) {
-									((BeamProjectile*)this)->dealtDamage = 0.0f;
+								NiAVObject* parent = it->colObj.get()->sceneObject;
+								if (parent) {
+									for (int i = 0; i < parts.size(); ++i) {
+										if (parent->name == parts[i]) {
+											if (shielddata[i].material) {
+												it->materialType = shielddata[i].material;
+											}
+											if (shielddata[i].spell) {
+												shielddata[i].spell->Cast(this->shooter.get().get(), a);
+											}
+											float dtAdd = a->GetActorValue(*damageThresholdAdd);
+											float dtMul = a->GetActorValue(*damageThresholdMul);
+											if (shielddata[i].damageThreshold <= 0 || this->damage < (shielddata[i].damageThreshold + dtAdd) * dtMul) {
+												this->damage = 0.0f;
+												if (this->IsBeamProjectile()) {
+													((BeamProjectile*)this)->dealtDamage = 0.0f;
+												}
+											}
+										}
+									}
 								}
 							}
 						}
 					}
+					//}
 				}
-				//}
 			}
 		}
 		FnProcessImpacts fn = fnHash.at(*(uint64_t*)this);
