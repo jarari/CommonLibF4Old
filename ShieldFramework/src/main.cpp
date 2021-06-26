@@ -66,10 +66,12 @@ using std::unordered_map;
 using std::vector;
 ptrdiff_t ProcessProjectileFX_PatchOffset = 0x1A1;
 REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(806412), ProcessProjectileFX_PatchOffset };
-unordered_map<Actor*, BGSMaterialType*> originalMaterialMap;
-static unordered_map<uint32_t, vector<std::string>> shieldPartsMap;
-static unordered_map<uint32_t, vector<ShieldData>> shieldDataMap;
-static unordered_map<TESObjectREFR*, bhkNPCollisionObject*> shieldCollisionObjects;
+static unordered_map<const Actor*, const BGSMaterialType*> originalMaterialMap;
+static unordered_map<const uint32_t, const vector<std::string>> shieldPartsMap;
+static unordered_map<const uint32_t, const vector<ShieldData>> shieldDataMap;
+static unordered_map<const TESObjectREFR*, const bhkNPCollisionObject*> shieldCollisionObjects;
+static ActorValueInfo* damageThresholdAdd;
+static ActorValueInfo* damageThresholdMul;
 
 //POSTPONED:Is it possible to check if the actor/collision object still exists?
 
@@ -189,35 +191,6 @@ public:
 			if (it->processed)
 				continue;
 			if (it->collidee.get() && it->collidee.get()->GetFormType() == ENUM_FORM_ID::kACHR) {
-				/*Actor* a = (Actor*)it->collidee.get().get();
-				if (!a || !a->currentProcess || !a->currentProcess->middleHigh)
-					continue;
-				BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
-				BGSKeywordForm* keywordForm = nullptr;
-				for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
-					if (eqit->equipIndex.index == 0 && eqit->item.instanceData.get()) {
-						keywordForm = ((TESObjectWEAP::InstanceData*)eqit->item.instanceData.get())->keywords;
-						if (!keywordForm)
-							keywordForm = (TESObjectWEAP*)eqit->item.object;
-						break;
-					}
-				}
-
-				if (!keywordForm)
-					continue;
-
-				BGSKeyword** keywords = keywordForm->keywords;
-				bool found = false;
-				uint32_t i = 0;
-				while (!found && i < keywordForm->numKeywords) {
-					if (keywords[i] == shieldKeyword) {
-						found = true;
-						logger::warn("Keyword found"sv);
-					}
-					++i;
-				}*/
-
-				//if (found) {
 				Actor* a = (Actor*)it->collidee.get().get();
 				if (!a || !a->currentProcess || !a->currentProcess->middleHigh)
 					continue;
@@ -251,7 +224,9 @@ public:
 							if (shielddata[i].spell) {
 								shielddata[i].spell->Cast(this->shooter.get().get(), a);
 							}
-							if (shielddata[i].damageThreshold <= 0 || this->damage < shielddata[i].damageThreshold) {
+							float dtAdd = a->GetActorValue(*damageThresholdAdd);
+							float dtMul = a->GetActorValue(*damageThresholdMul);
+							if (shielddata[i].damageThreshold <= 0 || this->damage < (shielddata[i].damageThreshold + dtAdd) * dtMul) {
 								this->damage = 0.0f;
 								if (this->IsBeamProjectile()) {
 									((BeamProjectile*)this)->dealtDamage = 0.0f;
@@ -332,6 +307,17 @@ SpellItem* GetSpellByFullName(std::string spellname) {
 	BSTArray<SpellItem*> spells = dh->GetFormArray<SpellItem>();
 	for (auto it = spells.begin(); it != spells.end(); ++it) {
 		if (strcmp((*it)->GetFullName(), spellname.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+ActorValueInfo* GetAVIFByEditorID(std::string editorID) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<ActorValueInfo*> avifs = dh->GetFormArray<ActorValueInfo>();
+	for (auto it = avifs.begin(); it != avifs.end(); ++it) {
+		if (strcmp((*it)->formEditorID.c_str(), editorID.c_str()) == 0) {
 			return (*it);
 		}
 	}
@@ -566,45 +552,48 @@ void InitializeImpactData() {
 void InitializeFramework() {
 	uint64_t addr;
 	uint64_t offset = 0x680;
-	for (int i = 0; i < 1; ++i) {
-		addr = Projectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching Projectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = Projectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching Projectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = MissileProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching MissileProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = MissileProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching MissileProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = ArrowProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching ArrowProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = ArrowProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching ArrowProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = GrenadeProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching GrenadeProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = GrenadeProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching GrenadeProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = BeamProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching BeamProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = BeamProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching BeamProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = FlameProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching FlameProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = FlameProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching FlameProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = ConeProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching ConeProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
+	addr = ConeProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching ConeProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
-		addr = BarrierProjectile::VTABLE[i].address();
-		logger::warn(_MESSAGE("Patching BarrierProjectile %llx", addr));
-		ProjectileHooks::HookProcessImpacts(addr, offset);
-	}
+	addr = BarrierProjectile::VTABLE[0].address();
+	logger::warn(_MESSAGE("Patching BarrierProjectile %llx", addr));
+	ProjectileHooks::HookProcessImpacts(addr, offset);
 
 	//Fallout4.exe+0xFD58A0 is the function that plays the impact effect based on various impact data.
 	//0x1A1 from this function is the part where it checks the form type of collidee and play the impact effect based on the race data.
 	//This will modify that behavior, forcing the game to always use the projectile impact data's materialType for the impact effect.
 	logger::warn(_MESSAGE("Patching impact form type check %llx", ProcessProjectileFX.address()));
 	REL::safe_write(ProcessProjectileFX.address(), (uint8_t)0xEB);
+
+	damageThresholdAdd = GetAVIFByEditorID(std::string("ShieldDTAdd"));
+	logger::warn(_MESSAGE("ShieldDTAdd %llx", damageThresholdAdd));
+	damageThresholdMul = GetAVIFByEditorID(std::string("ShieldDTMul"));
+	logger::warn(_MESSAGE("ShieldDTMul %llx", damageThresholdMul));
 }
 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
