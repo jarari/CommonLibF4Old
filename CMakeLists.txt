@@ -69,6 +69,8 @@ conditionally_add_subdirectory(DoomFist)
 conditionally_add_subdirectory(ShieldFramework)
 conditionally_add_subdirectory(AVF)
 conditionally_add_subdirectory(DragonBlade)
+conditionally_add_subdirectory(bullet3-3.17)
+conditionally_add_subdirectory(DeBadWeapons)
 
 
 include(FetchContent)
