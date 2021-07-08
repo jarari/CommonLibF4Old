@@ -205,6 +205,18 @@ void SetupArmors() {
 	vestTier = GetAVIFByEditorID("EFD_Vest_Tier");
 	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_Helmet_Tier %llx", helmetTier));
 	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_Vest_Tier %llx", vestTier));
+
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<TESObjectARMO*> armors = dh->GetFormArray<TESObjectARMO>();
+	for (auto it = armors.begin(); it != armors.end(); ++it) {
+		TESObjectARMO* armor = (*it);
+		if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
+			spdlog::log(spdlog::level::warn, _MESSAGE("Vest\t\t%s\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor));
+		}
+		else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
+			spdlog::log(spdlog::level::warn, _MESSAGE("Helmet\t%s\t\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor));
+		}
+	}
 }
 
 struct ActorEquipManagerEvent::Event {
@@ -222,8 +234,8 @@ struct TESObjectLoadedEvent {
 
 struct TESEquipEvent {
 	Actor* a;					//00
-	uint32_t unk08;				//08
 	uint32_t formId;			//0C
+	uint32_t unk08;				//08
 	uint64_t flag;				//10 0x00000000ff000000 for unequip
 };
 
@@ -246,34 +258,83 @@ struct TESEquipEvent {
 // 45	-	0x8000
 //****************************************************
 
+void SetHelmetTier(Actor* a, TESObjectARMO* armor, uint16_t rating) {
+	if (rating >= helmet_tier3Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
+		a->SetActorValue(*helmetTier, 3.0f);
+	}
+	else if (rating >= helmet_tier2Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
+		a->SetActorValue(*helmetTier, 2.0f);
+	}
+	else if (rating >= helmet_tier1Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
+		a->SetActorValue(*helmetTier, 1.0f);
+	}
+	else {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
+		a->SetActorValue(*helmetTier, 0.0f);
+	}
+}
+
+void SetVestTier(Actor* a, uint16_t rating) {
+	if (rating >= vest_tier3Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 vest"));
+		a->SetActorValue(*vestTier, 3.0f);
+	}
+	else if (rating >= vest_tier2Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 vest"));
+		a->SetActorValue(*vestTier, 2.0f);
+	}
+	else if (rating >= vest_tier1Rating) {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 vest"));
+		a->SetActorValue(*vestTier, 1.0f);
+	}
+	else {
+		spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 vest"));
+		a->SetActorValue(*vestTier, 0.0f);
+	}
+}
+
 class EquipWatcher : public BSTEventSink<TESEquipEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESEquipEvent& evn, BSTEventSource<TESEquipEvent>* a_source) {
+		if (evn.flag != 0x00000000ff000000) {
+			spdlog::log(spdlog::level::warn, _MESSAGE("Equip item called (FormID %llx)", evn.formId));
+		}
+		else {
+			spdlog::log(spdlog::level::warn, _MESSAGE("Une item called (FormID %llx)", evn.formId));
+		}
 		TESForm* item = TESForm::GetFormByID(evn.formId);
 		if (item && item->formType == ENUM_FORM_ID::kARMO) {
 			TESObjectARMO* armor = static_cast<TESObjectARMO*>(item);
 			//TESObjectARMO::InstanceData* data = *(TESObjectARMO::InstanceData**)((uintptr_t)&evn + 0xd0);
 			TESObjectARMO::InstanceData* data = &(armor->data);
-			if (armor->bipedModelData.bipedObjectSlots & 0x800) {		//Vest
-				if (evn.flag == 0x00000000ff000000) {
-					evn.a->SetActorValue(*vestTier, 0.0f);
+			if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
+				uint16_t vestAR = 0;
+				for (auto invitem = evn.a->inventoryList->data.begin(); invitem != evn.a->inventoryList->data.end(); ++invitem) {
+					if (invitem->stackData->IsEquipped()) {
+						if (invitem->object->formType == ENUM_FORM_ID::kARMO) {
+							TESObjectARMO* invarmor = static_cast<TESObjectARMO*>(invitem->object);
+							TESObjectARMO::InstanceData* invdata = &(armor->data);
+							if (invarmor->bipedModelData.bipedObjectSlots & 0x800 || invarmor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
+								if (evn.flag != 0x00000000ff000000 || (evn.flag == 0x00000000ff000000 && invarmor != armor)) {
+									vestAR += data->rating;
+									spdlog::log(spdlog::level::warn, _MESSAGE("Vest found %s (FormID %llx at %llx)", invarmor->fullName.c_str(), invarmor->formID, invarmor));
+								}
+							}
+						}
+					}
 				}
-				else {
-					if (data->rating >= vest_tier3Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*vestTier, 3.0f);
-					}
-					else if (data->rating >= vest_tier2Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*vestTier, 2.0f);
-					}
-					else if (data->rating >= vest_tier1Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*vestTier, 1.0f);
+				spdlog::log(spdlog::level::warn, _MESSAGE("Vest AR %d", vestAR));
+				SetVestTier(evn.a, vestAR);
+				if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
+					uint16_t adjustedRating = data->rating / 4;
+					if (evn.flag == 0x00000000ff000000) {
+						evn.a->SetActorValue(*helmetTier, 0.0f);
 					}
 					else {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*vestTier, 0.0f);
+						SetHelmetTier(evn.a, armor, adjustedRating);
 					}
 				}
 			}
@@ -282,22 +343,7 @@ public:
 					evn.a->SetActorValue(*helmetTier, 0.0f);
 				}
 				else {
-					if (data->rating >= helmet_tier3Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*helmetTier, 3.0f);
-					}
-					else if (data->rating >= helmet_tier2Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*helmetTier, 2.0f);
-					}
-					else if (data->rating >= helmet_tier1Rating) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*helmetTier, 1.0f);
-					}
-					else {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-						evn.a->SetActorValue(*helmetTier, 0.0f);
-					}
+					SetHelmetTier(evn.a, armor, data->rating);
 				}
 			}
 		}
@@ -309,54 +355,34 @@ public:
 class ObjectLoadWatcher : public BSTEventSink<TESObjectLoadedEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESObjectLoadedEvent& evn, BSTEventSource<TESObjectLoadedEvent>* a_source) {
+		if (!evn.loaded) return BSEventNotifyControl::kContinue;
 		TESForm* form = TESForm::GetFormByID(evn.formId);
 		if (form && form->formType == ENUM_FORM_ID::kACHR) {
 			Actor* a = static_cast<Actor*>(form);
 			spdlog::log(spdlog::level::warn, _MESSAGE("Actor FormID %llx at %llx", a->formID, a));
+			uint16_t vestAR = 0;
 			for (auto item = a->inventoryList->data.begin(); item != a->inventoryList->data.end(); ++item) {
 				if (item->stackData->IsEquipped()) {
 					if (item->object->formType == ENUM_FORM_ID::kARMO) {
 						TESObjectARMO* armor = static_cast<TESObjectARMO*>(item->object);
 						TESObjectARMO::InstanceData* data = &(armor->data);
-						if (armor->bipedModelData.bipedObjectSlots & 0x800) {		//Vest
-							if (data->rating >= vest_tier3Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*vestTier, 3.0f);
-							}
-							else if (data->rating >= vest_tier2Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*vestTier, 2.0f);
-							}
-							else if (data->rating >= vest_tier1Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*vestTier, 1.0f);
-							}
-							else {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 vest %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*vestTier, 0.0f);
+						if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
+							vestAR += data->rating;
+							spdlog::log(spdlog::level::warn, _MESSAGE("Vest found %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
+							if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
+								uint16_t adjustedRating = data->rating / 4;
+								SetHelmetTier(a, armor, adjustedRating);
 							}
 						}
 						else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
-							if (data->rating >= helmet_tier3Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier3 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*helmetTier, 1.0f);
-							}
-							else if (data->rating >= helmet_tier2Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier2 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*helmetTier, 2.0f);
-							}
-							else if (data->rating >= helmet_tier1Rating) {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier1 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*helmetTier, 3.0f);
-							}
-							else {
-								spdlog::log(spdlog::level::warn, _MESSAGE("Tier0 helmet %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
-								a->SetActorValue(*helmetTier, 0.0f);
-							}
+							spdlog::log(spdlog::level::warn, _MESSAGE("Helmet rating %d", data->rating));
+							SetHelmetTier(a, armor, data->rating);
 						}
 					}
 				}
 			}
+			spdlog::log(spdlog::level::warn, _MESSAGE("Vest AR %d", vestAR));
+			SetVestTier(a, vestAR);
 		}
 		return BSEventNotifyControl::kContinue;
 	}
