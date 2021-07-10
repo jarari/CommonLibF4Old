@@ -11,6 +11,7 @@ char* _MESSAGE(const char* fmt, ...) {
 	va_start(args, fmt);
 	vsprintf_s(tempbuf, sizeof(tempbuf), fmt, args);
 	va_end(args);
+	spdlog::log(spdlog::level::warn, tempbuf);
 
 	return tempbuf;
 }
@@ -33,7 +34,7 @@ void Dump(const void* mem, unsigned int size) {
 				<< std::setw(2) << (int)up[i - 6]
 				<< std::setw(2) << (int)up[i - 7] << std::setfill('0');
 			stream << "\t0x" << std::setw(2) << std::hex << row * 8 << std::setfill('0');
-			spdlog::log(spdlog::level::warn, _MESSAGE("%s", stream.str().c_str()));
+			_MESSAGE("%s", stream.str().c_str());
 			stream.str(std::string());
 			row++;
 		}
@@ -131,11 +132,11 @@ std::unordered_map<TESAmmo*, bool> GetAmmunitionWhitelist() {
 	//ini 내 설정 읽기
 	CSimpleIniA::TNamesDepend ammoKeys;
 	ini.GetAllKeys("ManagedAmmunitionsFile", ammoKeys);
-	spdlog::log(spdlog::level::warn, "Ammunition file list");
+	_MESSAGE("Ammunition file list");
 
 	//로그에 파일 목록 출력
 	for (auto key = ammoKeys.begin(); key != ammoKeys.end(); ++key) {
-		spdlog::log(spdlog::level::warn, _MESSAGE("%s", key->pItem));
+		_MESSAGE("%s", key->pItem);
 	}
 
 	//게임에 로드된 폼 중 탄약만 가져온다
@@ -152,7 +153,7 @@ std::unordered_map<TESAmmo*, bool> GetAmmunitionWhitelist() {
 			for (auto file = fa->begin(); file != fa->end(); ++file) {
 				if (strcmp(key->pItem, (*file)->filename) == 0
 					&& (*it)->data.damage != 0) {
-					spdlog::log(spdlog::level::warn, _MESSAGE("%s added to the whitelist", (*it)->fullName.c_str()));
+					_MESSAGE("%s added to the whitelist", (*it)->fullName.c_str());
 					whitelisted = true;
 					ret.insert(std::pair<TESAmmo*, bool>(*it, true));
 					break;
@@ -167,7 +168,7 @@ std::unordered_map<TESAmmo*, bool> GetAmmunitionWhitelist() {
 
 void SetupWeapons() {
 	uint16_t uniqueDmg = (uint16_t)std::stoi(ini.GetValue("General", "UniqueDamage", "15"));
-	spdlog::log(spdlog::level::warn, _MESSAGE("UniqueDamage %d", uniqueDmg));
+	_MESSAGE("UniqueDamage %d", uniqueDmg);
 
 	//탄약 화이트리스트 제작
 	ammoWhitelist = GetAmmunitionWhitelist();
@@ -182,7 +183,7 @@ void SetupWeapons() {
 	BGSListForm* gunsKeywordList = (BGSListForm*)TESForm::GetFormByID(0xF78EC);
 	BGSKeyword* uniqueKeyword = (BGSKeyword*)TESForm::GetFormByID(0x1B3FAC);
 
-	spdlog::log(spdlog::level::warn, "Keyword list found.");
+	_MESSAGE("Keyword list found.");
 	//게임에 로드된 모든 무기 폼에 대하여
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESObjectWEAP*> weapons = dh->GetFormArray<TESObjectWEAP>();
@@ -198,7 +199,7 @@ void SetupWeapons() {
 					//탄약 화이트리스트와 대조
 					TESAmmo* ammo = wep->weaponData.ammo;
 					if (ammo && ammoWhitelist.find(ammo) != ammoWhitelist.end()) {
-						spdlog::log(spdlog::level::warn, _MESSAGE("Weapon Found : %s (FormID %llx at %llx)", wep->fullName.c_str(), wep->formID, wep));
+						_MESSAGE("Weapon Found : %s (FormID %llx at %llx)", wep->fullName.c_str(), wep->formID, wep);
 						uint16_t oldDamage = wep->weaponData.attackDamage;
 						//유니크 확인
 						bool isUnique = false;
@@ -208,7 +209,7 @@ void SetupWeapons() {
 							}
 						}
 						wep->weaponData.attackDamage = isUnique * uniqueDmg;
-						spdlog::log(spdlog::level::warn, _MESSAGE("Old dmg %d, New dmg 0", oldDamage));
+						_MESSAGE("Old dmg %d, New dmg 0", oldDamage);
 						found = true;
 					}
 				}
@@ -221,36 +222,36 @@ void SetupWeapons() {
 void SetupArmors() {
 	CSimpleIniA::TNamesDepend helmetKeys;
 	ini.GetAllKeys("Helmet", helmetKeys);
-	spdlog::log(spdlog::level::warn, _MESSAGE("Helmet Tier References"));
+	_MESSAGE("Helmet Tier References");
 	for (auto key = helmetKeys.begin(); key != helmetKeys.end(); ++key) {
 		uint16_t ref = (uint16_t)std::stoi(ini.GetValue("Helmet", key->pItem));
 		helmetRatings.push_back(ref);
-		spdlog::log(spdlog::level::warn, _MESSAGE("%d", ref));
+		_MESSAGE("%d", ref);
 	}
 
 	CSimpleIniA::TNamesDepend vestKeys;
 	ini.GetAllKeys("Vest", vestKeys);
-	spdlog::log(spdlog::level::warn, _MESSAGE("Vest Tier References"));
+	_MESSAGE("Vest Tier References");
 	for (auto key = vestKeys.begin(); key != vestKeys.end(); ++key) {
 		uint16_t ref = (uint16_t)std::stoi(ini.GetValue("Vest", key->pItem));
 		vestRatings.push_back(ref);
-		spdlog::log(spdlog::level::warn, _MESSAGE("%d", ref));
+		_MESSAGE("%d", ref);
 	}
 
 	helmetTier = GetAVIFByEditorID("EFD_Helmet_Tier");
 	vestTier = GetAVIFByEditorID("EFD_Vest_Tier");
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_Helmet_Tier %llx", helmetTier));
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_Vest_Tier %llx", vestTier));
+	_MESSAGE("EFD_Helmet_Tier %llx", helmetTier);
+	_MESSAGE("EFD_Vest_Tier %llx", vestTier);
 
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESObjectARMO*> armors = dh->GetFormArray<TESObjectARMO>();
 	for (auto it = armors.begin(); it != armors.end(); ++it) {
 		TESObjectARMO* armor = (*it);
 		if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
-			spdlog::log(spdlog::level::warn, _MESSAGE("Vest\t\t%s\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor));
+			_MESSAGE("Vest\t\t%s\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor);
 		}
 		else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
-			spdlog::log(spdlog::level::warn, _MESSAGE("Helmet\t%s\t\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor));
+			_MESSAGE("Helmet\t%s\t\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor);
 		}
 	}
 }
@@ -258,19 +259,19 @@ void SetupArmors() {
 void SetupDeathMark() {
 	CSimpleIniA::TNamesDepend cartridgeKeys;
 	ini.GetAllKeys("Cartridges", cartridgeKeys);
-	spdlog::log(spdlog::level::warn, _MESSAGE("Cartridges"));
+	_MESSAGE("Cartridges");
 	for (auto key = cartridgeKeys.begin(); key != cartridgeKeys.end(); ++key) {
 		cartridges.push_back(ini.GetValue("Cartridges", key->pItem));
-		spdlog::log(spdlog::level::warn, _MESSAGE("%s", ini.GetValue("Cartridges", key->pItem)));
+		_MESSAGE("%s", ini.GetValue("Cartridges", key->pItem));
 	}
 
 	for (auto it = cartridges.begin(); it != cartridges.end(); ++it) {
-		spdlog::log(spdlog::level::warn, _MESSAGE("%s Death Conditions", it->c_str()));
+		_MESSAGE("%s Death Conditions", it->c_str());
 		std::vector<float> conditions;
 		float headChance = std::stof(ini.GetValue("CartridgeFatalities", (*it + "Head").c_str()));
-		spdlog::log(spdlog::level::warn, _MESSAGE("Head %f", headChance));
+		_MESSAGE("Head %f", headChance);
 		float torsoChance = std::stof(ini.GetValue("CartridgeFatalities", (*it + "Torso").c_str()));
-		spdlog::log(spdlog::level::warn, _MESSAGE("Torso %f", torsoChance));
+		_MESSAGE("Torso %f", torsoChance);
 		conditions.push_back(headChance);
 		conditions.push_back(torsoChance);
 		deathConditions.insert(std::pair<std::string, std::vector<float>>(*it, conditions));
@@ -279,11 +280,11 @@ void SetupDeathMark() {
 	for (auto it = cartridges.begin(); it != cartridges.end(); ++it) {
 		CSimpleIniA::TNamesDepend protectionKeys;
 		ini.GetAllKeys(it->c_str(), protectionKeys);
-		spdlog::log(spdlog::level::warn, _MESSAGE("%s Protection Chances", it->c_str()));
+		_MESSAGE("%s Protection Chances", it->c_str());
 		std::vector<uint16_t> chances;
 		for (auto key = protectionKeys.begin(); key != protectionKeys.end(); ++key) {
 			chances.push_back((uint16_t)std::stoi((ini.GetValue(it->c_str(), key->pItem))));
-			spdlog::log(spdlog::level::warn, _MESSAGE("%d", std::stoi((ini.GetValue(it->c_str(), key->pItem)))));
+			_MESSAGE("%d", std::stoi((ini.GetValue(it->c_str(), key->pItem))));
 		}
 		protectionChances.insert(std::pair<std::string, std::vector<uint16_t>>(*it, chances));
 	}
@@ -293,8 +294,8 @@ void SetupDeathMark() {
 	perceptionCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036C);
 	enduranceCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036D);
 	brainCondition = (ActorValueInfo*)TESForm::GetFormByID(0x000372);
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_DeathMark %llx", deathmarked));
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD_LastHitPart %llx", lasthitpart));
+	_MESSAGE("EFD_DeathMark %llx", deathmarked);
+	_MESSAGE("EFD_LastHitPart %llx", lasthitpart);
 
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<EffectSetting*> mgefs = dh->GetFormArray<EffectSetting>();
@@ -311,48 +312,72 @@ void SetupBleeding() {
 	bldHead.initial = std::stof(ini.GetValue("BleedingHead", "Initial"));
 	bldHead.multiplier = std::stof(ini.GetValue("BleedingHead", "Multiplier"));
 	bldHead.duration = std::stof(ini.GetValue("BleedingHead", "Duration"));
+	for (auto it = bldHead.spell->listOfEffects.begin(); it != bldHead.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldHead.initial;
+		(*it)->data.duration = bldHead.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Head, bldHead));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedHead %llx", bldHead.spell));
+	_MESSAGE("_SpellConditionBleedHead %llx", bldHead.spell);
 
 	BleedingData bldTorso;
 	bldTorso.spell = GetSpellByFullName(std::string("EFD Condition Bleed Torso"));
 	bldTorso.initial = std::stof(ini.GetValue("BleedingTorso", "Initial"));
 	bldTorso.multiplier = std::stof(ini.GetValue("BleedingTorso", "Multiplier"));
 	bldTorso.duration = std::stof(ini.GetValue("BleedingTorso", "Duration"));
+	for (auto it = bldTorso.spell->listOfEffects.begin(); it != bldTorso.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldTorso.initial;
+		(*it)->data.duration = bldTorso.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Torso, bldTorso));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedTorso %llx", bldTorso.spell));
+	_MESSAGE("_SpellConditionBleedTorso %llx", bldTorso.spell);
 
 	BleedingData bldLArm;
 	bldLArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed LArm"));
 	bldLArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
 	bldLArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldLArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
+	for (auto it = bldLArm.spell->listOfEffects.begin(); it != bldLArm.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldLArm.initial;
+		(*it)->data.duration = bldLArm.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LArm, bldLArm));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedLArm %llx", bldLArm.spell));
+	_MESSAGE("_SpellConditionBleedLArm %llx", bldLArm.spell);
 
 	BleedingData bldLLeg;
 	bldLLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed LLeg"));
 	bldLLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
 	bldLLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldLLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
+	for (auto it = bldLLeg.spell->listOfEffects.begin(); it != bldLLeg.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldLLeg.initial;
+		(*it)->data.duration = bldLLeg.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LLeg, bldLLeg));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedLLeg %llx", bldLLeg.spell));
+	_MESSAGE("_SpellConditionBleedLLeg %llx", bldLLeg.spell);
 
 	BleedingData bldRArm;
 	bldRArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed RArm"));
 	bldRArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
 	bldRArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldRArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
+	for (auto it = bldRArm.spell->listOfEffects.begin(); it != bldRArm.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldRArm.initial;
+		(*it)->data.duration = bldRArm.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RArm, bldRArm));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedRArm %llx", bldRArm.spell));
+	_MESSAGE("_SpellConditionBleedRArm %llx", bldRArm.spell);
 
 	BleedingData bldRLeg;
 	bldRLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed RLeg"));
 	bldRLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
 	bldRLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldRLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
+	for (auto it = bldRLeg.spell->listOfEffects.begin(); it != bldRLeg.spell->listOfEffects.end(); ++it) {
+		(*it)->data.magnitude = bldRLeg.initial;
+		(*it)->data.duration = bldRLeg.duration;
+	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RLeg, bldRLeg));
-	spdlog::log(spdlog::level::warn, _MESSAGE("_SpellConditionBleedRLeg %llx", bldRLeg.spell));
+	_MESSAGE("_SpellConditionBleedRLeg %llx", bldRLeg.spell);
 }
 
 #pragma endregion
@@ -405,7 +430,6 @@ void SetHelmetTier(Actor* a, uint16_t rating) {
 		if (rating >= helmetRatings[i]) {
 			a->SetActorValue(*helmetTier, i);
 			intervalFound = true;
-			//spdlog::log(spdlog::level::warn, _MESSAGE("%llx has Tier %d helmet", a, i));
 		}
 		--i;
 	}
@@ -420,7 +444,6 @@ void SetVestTier(Actor* a, uint16_t rating) {
 		if (rating >= vestRatings[i]) {
 			a->SetActorValue(*vestTier, i);
 			intervalFound = true;
-			//spdlog::log(spdlog::level::warn, _MESSAGE("%llx has Tier %d vest", a, i));
 		}
 		--i;
 	}
@@ -431,16 +454,9 @@ void SetVestTier(Actor* a, uint16_t rating) {
 class EquipWatcher : public BSTEventSink<TESEquipEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESEquipEvent& evn, BSTEventSource<TESEquipEvent>* a_source) {
-		/*if (evn.flag != 0x00000000ff000000) {
-			spdlog::log(spdlog::level::warn, _MESSAGE("Equip item called on %llx (FormID %llx)", evn.a, evn.formId));
-		}
-		else {
-			spdlog::log(spdlog::level::warn, _MESSAGE("Unequip item called on %llx (FormID %llx)", evn.a, evn.formId));
-		}*/
 		TESForm* item = TESForm::GetFormByID(evn.formId);
 		if (item && item->formType == ENUM_FORM_ID::kARMO) {
 			TESObjectARMO* armor = static_cast<TESObjectARMO*>(item);
-			//TESObjectARMO::InstanceData* data = *(TESObjectARMO::InstanceData**)((uintptr_t)&evn + 0xd0);
 			TESObjectARMO::InstanceData* data = &(armor->data);
 			if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
 				uint16_t vestAR = 0;
@@ -452,13 +468,11 @@ public:
 							if (invarmor->bipedModelData.bipedObjectSlots & 0x800 || invarmor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
 								if (evn.flag != 0x00000000ff000000 || (evn.flag == 0x00000000ff000000 && invarmor != armor)) {
 									vestAR += data->rating;
-									//spdlog::log(spdlog::level::warn, _MESSAGE("Vest found %s (FormID %llx at %llx)", invarmor->fullName.c_str(), invarmor->formID, invarmor));
 								}
 							}
 						}
 					}
 				}
-				//spdlog::log(spdlog::level::warn, _MESSAGE("Vest AR %d", vestAR));
 				SetVestTier(evn.a, vestAR);
 				if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
 					uint16_t adjustedRating = data->rating / 4;
@@ -491,7 +505,6 @@ public:
 		TESForm* form = TESForm::GetFormByID(evn.formId);
 		if (form && form->formType == ENUM_FORM_ID::kACHR) {
 			Actor* a = static_cast<Actor*>(form);
-			//spdlog::log(spdlog::level::warn, _MESSAGE("Actor FormID %llx at %llx", a->formID, a));
 			uint16_t vestAR = 0;
 			if (a->inventoryList) {
 				for (auto item = a->inventoryList->data.begin(); item != a->inventoryList->data.end(); ++item) {
@@ -501,20 +514,17 @@ public:
 							TESObjectARMO::InstanceData* data = &(armor->data);
 							if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
 								vestAR += data->rating;
-								//spdlog::log(spdlog::level::warn, _MESSAGE("Vest found %s (FormID %llx at %llx)", armor->fullName.c_str(), armor->formID, armor));
 								if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
 									uint16_t adjustedRating = data->rating / 4;
 									SetHelmetTier(a, adjustedRating);
 								}
 							}
 							else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
-								//spdlog::log(spdlog::level::warn, _MESSAGE("Helmet rating %d", data->rating));
 								SetHelmetTier(a, data->rating);
 							}
 						}
 					}
 				}
-				//spdlog::log(spdlog::level::warn, _MESSAGE("Vest AR %d", vestAR));
 				SetVestTier(a, vestAR);
 			}
 		}
@@ -540,18 +550,18 @@ public:
 						bool isTorso = offset - 16;
 						if ((isTorso && a->GetActorValue(*lasthitpart) == 2) || (!isTorso && a->GetActorValue(*lasthitpart) == 1)) {
 							std::string cartridge(mgef->GetFullName() + offset);
-							spdlog::log(spdlog::level::warn, _MESSAGE("Processing DeathMark %s", cartridge.c_str()));
+							_MESSAGE("Processing DeathMark %s", cartridge.c_str());
 							auto dclookup = deathConditions.find(cartridge);
 							if (dclookup != deathConditions.end()) {
 								bool hasDeathChance = false;
 								if (isTorso) {
 									hasDeathChance = dclookup->second[1] >= a->GetActorValue(*enduranceCondition);
-									spdlog::log(spdlog::level::warn, _MESSAGE("Torso condition %f current %f", dclookup->second[1], a->GetActorValue(*enduranceCondition)));
+									_MESSAGE("Torso condition %f current %f", dclookup->second[1], a->GetActorValue(*enduranceCondition));
 								}
 								else {
 									hasDeathChance = dclookup->second[0] >= a->GetActorValue(*perceptionCondition)
 										|| dclookup->second[0] >= a->GetActorValue(*brainCondition);
-									spdlog::log(spdlog::level::warn, _MESSAGE("Head condition %f current %f", dclookup->second[0], a->GetActorValue(*perceptionCondition)));
+									_MESSAGE("Head condition %f current %f", dclookup->second[0], a->GetActorValue(*perceptionCondition));
 								}
 								if (hasDeathChance) {
 									auto pclookup = protectionChances.find(cartridge);
@@ -561,11 +571,11 @@ public:
 										std::mt19937 e{ rd() }; // or std::default_random_engine e{rd()};
 										std::uniform_int_distribution<uint16_t> dist{ 1, 100 };
 										uint16_t result = dist(e);
-										spdlog::log(spdlog::level::warn, _MESSAGE("Protection Chance %d result %d", chance, result));
+										_MESSAGE("Protection Chance %d result %d", chance, result);
 										if (result > chance) {
 											killDeathMarked->Cast(a, a);
 											if(a == PlayerCharacter::GetSingleton())
-												spdlog::log(spdlog::level::warn, _MESSAGE("---Player killed by deathmark---"));
+												_MESSAGE("---Player killed by deathmark---");
 										}
 									}
 								}
@@ -632,9 +642,9 @@ public:
 			NiAVObject* parent = ipct.colObj.get()->sceneObject;
 			if (parent) {
 				if(a == PlayerCharacter::GetSingleton())
-					spdlog::log(spdlog::level::warn, _MESSAGE("Player got hit on %s", parent->name.c_str()));
+					_MESSAGE("Player got hit on %s", parent->name.c_str());
 				else
-					spdlog::log(spdlog::level::warn, _MESSAGE("%llx got hit on %s", a, parent->name.c_str()));
+					_MESSAGE("%llx got hit on %s", a, parent->name.c_str());
 				int partType = -1;
 				for (int i = 0; i < 26; ++i) {
 					BGSBodyPart* part = a->race->bodyPartData->partArray[i];
@@ -655,29 +665,29 @@ public:
 				}
 				TESAmmo* ammo = this->ammoSource;
 				if (ammo) {
-					spdlog::log(spdlog::level::warn, _MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
+					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
 															  this->ammoSource->fullName.c_str(), this->ammoSource->formID,
-															  this->ammoSource->data.projectile->formID));
+															  this->ammoSource->data.projectile->formID);
 				}
 				else if (this->weaponSource.instanceData && this->weaponSource.object->formType == ENUM_FORM_ID::kWEAP) {
 					ammo = static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->ammo;
-					spdlog::log(spdlog::level::warn, _MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
+					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
 															  ammo->fullName.c_str(), ammo->formID,
-															  ammo->data.projectile->formID));
+															  ammo->data.projectile->formID);
 				}
 				int partFound = 0;
 				for (auto torso = torsoParts.begin(); torso != torsoParts.end(); ++torso) {
 					if (partType == *torso) {
 						a->SetActorValue(*lasthitpart, 2);
 						partFound = 2;
-						spdlog::log(spdlog::level::warn, _MESSAGE("Node : %s is Torso", parent->name.c_str()));
+						_MESSAGE("Node : %s is Torso", parent->name.c_str());
 					}
 				}
 				for (auto head = headParts.begin(); head != headParts.end(); ++head) {
 					if (partType == *head) {
 						a->SetActorValue(*lasthitpart, 1);
 						partFound = 1;
-						spdlog::log(spdlog::level::warn, _MESSAGE("Node : %s is Head", parent->name.c_str()));
+						_MESSAGE("Node : %s is Head", parent->name.c_str());
 					}
 				}
 				if (!partFound) {
@@ -702,11 +712,11 @@ void SetupProjectile() {
 	uint64_t addr;
 	uint64_t offset = 0x680;
 	addr = MissileProjectile::VTABLE[0].address();
-	spdlog::log(spdlog::level::warn, _MESSAGE("Patching MissileProjectile %llx", addr));
+	_MESSAGE("Patching MissileProjectile %llx", addr);
 	HookProjectile::HookProcessImpacts(addr, offset);
 
 	addr = BeamProjectile::VTABLE[0].address();
-	spdlog::log(spdlog::level::warn, _MESSAGE("Patching BeamProjectile %llx", addr));
+	_MESSAGE("Patching BeamProjectile %llx", addr);
 	HookProjectile::HookProcessImpacts(addr, offset);
 
 	headHitMark = GetSpellByFullName(std::string("EFD Head HitMark"));
@@ -714,9 +724,9 @@ void SetupProjectile() {
 	torsoHitMark = GetSpellByFullName(std::string("EFD Torso HitMark"));
 	torsoHitMarkMGEF = torsoHitMark->listOfEffects[0]->effectSetting;
 	killDeathMarked = GetSpellByFullName(std::string("EFD Kill DeathMarked"));
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD Head HitMark %llx", headHitMark));
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD Torso HitMark %llx", torsoHitMark));
-	spdlog::log(spdlog::level::warn, _MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked));
+	_MESSAGE("EFD Head HitMark %llx", headHitMark);
+	_MESSAGE("EFD Torso HitMark %llx", torsoHitMark);
+	_MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked);
 }
 
 #pragma endregion
@@ -778,7 +788,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 	message->RegisterListener([](F4SE::MessagingInterface::Message* msg) -> void {
 		//게임 데이터가 모두 로드된 시점 (메인화면이 나오기 직전)
 		if (msg->type == F4SE::MessagingInterface::kGameDataReady) {
-			spdlog::log(spdlog::level::warn, _MESSAGE("PlayerCharacter %llx", PlayerCharacter::GetSingleton()));
+			_MESSAGE("PlayerCharacter %llx", PlayerCharacter::GetSingleton());
 			SetupWeapons();
 			SetupArmors();
 			SetupDeathMark();
