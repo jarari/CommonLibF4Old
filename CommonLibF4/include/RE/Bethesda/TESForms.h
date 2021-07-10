@@ -386,7 +386,15 @@ namespace RE
 
 	namespace EffectArchetypes
 	{
-		enum class ArchetypeID;
+		enum class ArchetypeID {
+			Absorb,
+			AccumulateMagnitude,
+			Banish,
+			BoundWeapon,
+			Calm,
+			Chameleon,
+			Cloak
+		};
 	}
 
 	namespace MagicSystem
@@ -1759,6 +1767,25 @@ namespace RE
 	};
 	static_assert(sizeof(BGSPerk) == 0x98);
 
+	class BGSBodyPart {
+	public:
+		BSFixedString PartNode;					//00
+		BSFixedString VATSTarget;				//08
+		BSFixedString TwistVariation;			//10
+		BSFixedString HitReactionStart;			//18
+		BSFixedString HitReactionEnd;			//20
+		BSFixedString TwistVariationX;			//28
+		BSFixedString TwistVariationY;			//30
+		BSFixedString TwistVariationZ;			//38
+		BSFixedString unk40;					//40
+		BSFixedString GoreEffectsTargetBone;	//48
+		void* TESModelVTable;					//50
+		BSFixedString LimbReplacementModel;		//58
+		void* TextureFileHashes;				//60
+		void* MaterialRelated;					//68
+		uint64_t unk70;							//70
+	};
+
 	class __declspec(novtable) BGSBodyPartData :
 		public TESForm,        // 000
 		public TESModel,       // 020
@@ -1768,6 +1795,35 @@ namespace RE
 		static constexpr auto RTTI{ RTTI::BGSBodyPartData };
 		static constexpr auto VTABLE{ VTABLE::BGSBodyPartData };
 		static constexpr auto FORM_ID{ ENUM_FORM_ID::kBPTD };
+		
+		enum PartType {
+			Torso,
+			Head1,
+			Eye,
+			LookAt,
+			FlyGrab,
+			Head2,
+			LeftArm1,
+			LeftArm2,
+			RightArm1,
+			RightArm2,
+			LeftLeg1,
+			LeftLeg2,
+			LeftLeg3,
+			RightLeg1,
+			RightLeg2,
+			RightLeg3,
+			Brain,
+			Weapon,
+			Root,
+			COM,
+			Pelvis,
+			Camera,
+			OffsetRoot,
+			LeftFoot,
+			RightFoot,
+			FaceTargetSource
+		};
 
 		// members
 		BGSBodyPart* partArray[26];                               // 058
