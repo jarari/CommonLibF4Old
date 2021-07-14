@@ -72,6 +72,7 @@ conditionally_add_subdirectory(DragonBlade)
 conditionally_add_subdirectory(bullet3-3.17)
 conditionally_add_subdirectory(DeBadWeapons)
 conditionally_add_subdirectory(PlayerVoiceFrequency)
+conditionally_add_subdirectory(TacticalAction)
 
 
 include(FetchContent)
