@@ -120,10 +120,10 @@ namespace RE
 			return func(this, a_event);
 		}
 
-		void HandleEvent(const ButtonEvent* a_event) override  // 08
+		void OnButtonEvent(const ButtonEvent* a_event) override  // 08
 		{
 			if (menuObj.IsObject()) {
-				using func_t = decltype(&IMenu::HandleEvent);
+				using func_t = decltype(&IMenu::OnButtonEvent);
 				REL::Relocation<func_t> func{ REL::ID(1414130) };
 				return func(this, a_event);
 			}
