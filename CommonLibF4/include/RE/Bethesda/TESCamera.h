@@ -184,6 +184,12 @@ namespace RE
 			return cameraStates[a_state];
 		}
 
+		void SetState(TESCameraState* a_newstate) const {
+			using func_t = decltype(&PlayerCamera::SetState);
+			REL::Relocation<func_t> func{ REL::ID(858847) };
+			return func(this, a_newstate);
+		}
+
 		template <class T>
 		[[nodiscard]] BSTSmartPointer<T> GetState() const  //
 			requires(std::derived_from<T, TESCameraState>)
