@@ -445,6 +445,13 @@ namespace RE
 			return func(this, a_equipIndex, a_ammo);
 		}
 
+		//Flag should be 0x35
+		void PlayIdle(Actor* a, uint32_t flag, TESIdleForm* idle, bool unk01 = true, uint64_t unk02 = 0) {
+			using func_t = decltype(&AIProcess::PlayIdle);
+			REL::Relocation<func_t> func{ REL::ID(1446774) };
+			return func(this, a, flag, idle, unk01, unk02);
+		}
+
 		// members
 		MiddleLowProcessData* middleLow;                    // 00
 		MiddleHighProcessData* middleHigh;                  // 08
