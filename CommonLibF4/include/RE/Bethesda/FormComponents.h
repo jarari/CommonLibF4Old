@@ -69,7 +69,11 @@ namespace RE
 		class Items;
 	}
 
-	enum class ACTOR_VALUE_MODIFIER;
+	enum class ACTOR_VALUE_MODIFIER {
+		Perm,
+		Temp,
+		Damage
+	};
 	enum class ENUM_FORM_ID;
 	enum class IO_TASK_PRIORITY;
 
