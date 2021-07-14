@@ -9,7 +9,7 @@ char* _MESSAGE(const char* fmt, ...) {
 	va_list args;
 
 	va_start(args, fmt);
-	vsprintf_s(tempbuf, sizeof(tempbuf), fmt, args);
+	vsnprintf(tempbuf, sizeof(tempbuf), fmt, args);
 	va_end(args);
 	spdlog::log(spdlog::level::warn, tempbuf);
 
@@ -68,6 +68,17 @@ ActorValueInfo* GetAVIFByEditorID(std::string editorID) {
 	return nullptr;
 }
 
+BGSExplosion* GetExplosionByFullName(std::string explosionname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<BGSExplosion*> explosions = dh->GetFormArray<BGSExplosion>();
+	for (auto it = explosions.begin(); it != explosions.end(); ++it) {
+		if (strcmp((*it)->GetFullName(), explosionname.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
 SpellItem* GetSpellByFullName(std::string spellname) {
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<SpellItem*> spells = dh->GetFormArray<SpellItem>();
@@ -85,29 +96,44 @@ SpellItem* GetSpellByFullName(std::string spellname) {
 
 //ini 정의, UTF-8 사용, 멀티키 X, 멀티라인 X 설정
 CSimpleIniA ini(true, false, false);
+bool playerForceKill = false;
 std::unordered_map<TESAmmo*, bool> ammoWhitelist;
 std::vector<BGSProjectile*> EFDProjectiles;
+size_t maxTier;
 std::vector<uint16_t> helmetRatings;
 std::vector<uint16_t> vestRatings;
-std::vector<std::string> cartridges;
-std::unordered_map<std::string, std::vector<uint16_t>> protectionChances;
-std::unordered_map<std::string, std::vector<float>> deathConditions;
+struct CartridgeData {
+	std::vector<uint16_t> protectionChances;
+	std::vector<float> deathConditions;
+};
+std::unordered_map<std::string, CartridgeData> cartridgeData;
 std::vector<uint32_t> deathmarkMGEFs;
 ActorValueInfo* helmetTier;
 ActorValueInfo* vestTier;
 ActorValueInfo* deathmarked;
 ActorValueInfo* lasthitpart;
-ActorValueInfo* enduranceCondition;
 ActorValueInfo* perceptionCondition;
+ActorValueInfo* enduranceCondition;
+ActorValueInfo* leftAttackCondition;
+ActorValueInfo* rightAttackCondition;
+ActorValueInfo* leftMobilityCondition;
+ActorValueInfo* rightMobilityCondition;
 ActorValueInfo* brainCondition;
-SpellItem* headHitMark;
-SpellItem* torsoHitMark;
-SpellItem* killDeathMarked;
 EffectSetting* headHitMarkMGEF;
 EffectSetting* torsoHitMarkMGEF;
+SpellItem* headHitMark;
+SpellItem* torsoHitMark;
+SpellItem* EFDDeathMarkGlobal;
+SpellItem* killDeathMarked;
 std::vector<BGSBodyPartData::PartType> torsoParts = { BGSBodyPartData::PartType::COM, BGSBodyPartData::PartType::Torso, BGSBodyPartData::PartType::Pelvis };
 std::vector<BGSBodyPartData::PartType> headParts = { BGSBodyPartData::PartType::Eye, BGSBodyPartData::PartType::Head1, BGSBodyPartData::PartType::Head2, BGSBodyPartData::PartType::Brain };
+std::vector<BGSBodyPartData::PartType> larmParts = { BGSBodyPartData::PartType::LeftArm1 };
+std::vector<BGSBodyPartData::PartType> llegParts = { BGSBodyPartData::PartType::LeftLeg1, BGSBodyPartData::PartType::LeftFoot };
+std::vector<BGSBodyPartData::PartType> rarmParts = { BGSBodyPartData::PartType::RightArm1, BGSBodyPartData::PartType::Weapon };
+std::vector<BGSBodyPartData::PartType> rlegParts = { BGSBodyPartData::PartType::RightLeg1, BGSBodyPartData::PartType::RightFoot };
+
 enum EFDBodyParts {
+	None,
 	Head,
 	Torso,
 	LArm,
@@ -115,13 +141,65 @@ enum EFDBodyParts {
 	RArm,
 	RLeg
 };
+
+std::string EFDBodyPartsName[] = {
+	"None",
+	"Head",
+	"Torso",
+	"LArm",
+	"LLeg",
+	"RArm",
+	"RLeg"
+};
+
+ActorValueInfo** EFDConditions[] = {
+	nullptr,
+	&perceptionCondition,
+	&enduranceCondition,
+	&leftAttackCondition,
+	&leftMobilityCondition,
+	&rightAttackCondition,
+	&rightMobilityCondition
+};
+
 struct BleedingData {
 	SpellItem* spell;
+	float condition;
 	float initial;
-	float duration;
 	float multiplier;
+	float duration;
+	void PrintData() {
+		_MESSAGE("Condition %f", condition);
+		_MESSAGE("Initial %f", initial);
+		_MESSAGE("Multiplier %f", multiplier);
+		_MESSAGE("Duration %f", duration);
+	}
 };
 std::unordered_map<EFDBodyParts, BleedingData> bleedingConfigs;
+REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
+
+BGSExplosion* globalExplosion;
+struct GlobalData {
+	float armorDamageInitial;
+	float armorDamageMultiplier;
+	float headFatality;
+	float torsoFatality;
+	float formulaA;
+	float formulaB;
+	float formulaC;
+	float formulaD;
+	void PrintData() {
+		_MESSAGE("ArmorDamageInitial %f", armorDamageInitial);
+		_MESSAGE("ArmorDamageMultiplier %f", armorDamageMultiplier);
+		_MESSAGE("HeadFatality %f", headFatality);
+		_MESSAGE("TorsoFatality %f", torsoFatality);
+		_MESSAGE("FormulaA %f", formulaA);
+		_MESSAGE("FormulaB %f", formulaB);
+		_MESSAGE("FormulaC %f", formulaC);
+		_MESSAGE("FormulaC %f", formulaD);
+	}
+};
+GlobalData gd;
 
 #pragma endregion
 
@@ -129,38 +207,32 @@ std::unordered_map<EFDBodyParts, BleedingData> bleedingConfigs;
 //탄약 화이트리스트 함수
 std::unordered_map<TESAmmo*, bool> GetAmmunitionWhitelist() {
 	std::unordered_map<TESAmmo*, bool> ret;
-	//ini 내 설정 읽기
-	CSimpleIniA::TNamesDepend ammoKeys;
-	ini.GetAllKeys("ManagedAmmunitionsFile", ammoKeys);
-	_MESSAGE("Ammunition file list");
-
-	//로그에 파일 목록 출력
-	for (auto key = ammoKeys.begin(); key != ammoKeys.end(); ++key) {
-		_MESSAGE("%s", key->pItem);
-	}
 
 	//게임에 로드된 폼 중 탄약만 가져온다
 	TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESAmmo*> ammos = dh->GetFormArray<TESAmmo>();
+
+	globalExplosion = GetExplosionByFullName("EFD Global Explosion");
+	_MESSAGE("EFD Global Explosion %llx", globalExplosion);
 	
 	//모든 탄약 폼에 대하여
 	for (auto it = ammos.begin(); it != ammos.end(); ++it) {
-		bool whitelisted = false;
-		
-		//폼을 변조하는 파일 목록과 ini에 설정된 파일 대조
-		for (auto key = ammoKeys.begin(); key != ammoKeys.end(); ++key) {
-			const TESFileArray* fa = (*it)->sourceFiles.array;
-			for (auto file = fa->begin(); file != fa->end(); ++file) {
-				if (strcmp(key->pItem, (*file)->filename) == 0
-					&& (*it)->data.damage != 0) {
-					_MESSAGE("%s added to the whitelist", (*it)->fullName.c_str());
-					whitelisted = true;
-					ret.insert(std::pair<TESAmmo*, bool>(*it, true));
-					break;
-				}
+		TESAmmo* ammo = *it;
+		if (ammo->data.damage > 0 && ammo->data.projectile && ammo->data.projectile->data.flags & 0x10000) {
+			/*BGSProjectile* proj = ammo->data.projectile;
+			if (proj->data.flags != 0x10a0a) {
+				proj->data.flags = 0x10a0a;
+				proj->data.explosionType = globalExplosion;
+				_MESSAGE("Patching projectile of %s...", ammo->fullName.c_str());
 			}
-			if (whitelisted)
-				break;
+			BGSProjectile* vatsproj = proj->data.vatsProjectile;
+			if (vatsproj && vatsproj->data.flags != 0x10a0a) {
+				vatsproj->data.flags = 0x10a0a;
+				vatsproj->data.explosionType = globalExplosion;
+				_MESSAGE("Patching VATS projectile of %s...", ammo->fullName.c_str());
+			}*/
+			_MESSAGE("%s is DeBadFall certified.", ammo->fullName.c_str());
+			ret.insert(std::pair<TESAmmo*, bool>(ammo, true));
 		}
 	}
 	return ret;
@@ -172,12 +244,6 @@ void SetupWeapons() {
 
 	//탄약 화이트리스트 제작
 	ammoWhitelist = GetAmmunitionWhitelist();
-
-	for (auto it = ammoWhitelist.begin(); it != ammoWhitelist.end(); ++it) {
-		BGSProjectile* ammoProj = it->first->data.projectile;
-		EFDProjectiles.push_back(ammoProj);
-		EFDProjectiles.push_back(ammoProj->data.vatsProjectile);
-	}
 
 	//바닐라에서 총과 유니크 무기의 정의를 가져옴
 	BGSListForm* gunsKeywordList = (BGSListForm*)TESForm::GetFormByID(0xF78EC);
@@ -237,13 +303,15 @@ void SetupArmors() {
 		vestRatings.push_back(ref);
 		_MESSAGE("%d", ref);
 	}
+	maxTier = max(helmetRatings.size(), vestRatings.size());
+	_MESSAGE("Tier max : %d", maxTier);
 
 	helmetTier = GetAVIFByEditorID("EFD_Helmet_Tier");
 	vestTier = GetAVIFByEditorID("EFD_Vest_Tier");
 	_MESSAGE("EFD_Helmet_Tier %llx", helmetTier);
 	_MESSAGE("EFD_Vest_Tier %llx", vestTier);
 
-	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	/*TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESObjectARMO*> armors = dh->GetFormArray<TESObjectARMO>();
 	for (auto it = armors.begin(); it != armors.end(); ++it) {
 		TESObjectARMO* armor = (*it);
@@ -253,13 +321,14 @@ void SetupArmors() {
 		else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
 			_MESSAGE("Helmet\t%s\t\t\t\tDR %d\t\t(FormID %llx at %llx)", armor->fullName.c_str(), armor->data.rating, armor->formID, armor);
 		}
-	}
+	}*/
 }
 
 void SetupDeathMark() {
-	CSimpleIniA::TNamesDepend cartridgeKeys;
+	/*CSimpleIniA::TNamesDepend cartridgeKeys;
 	ini.GetAllKeys("Cartridges", cartridgeKeys);
 	_MESSAGE("Cartridges");
+	std::vector<std::string> cartridges;
 	for (auto key = cartridgeKeys.begin(); key != cartridgeKeys.end(); ++key) {
 		cartridges.push_back(ini.GetValue("Cartridges", key->pItem));
 		_MESSAGE("%s", ini.GetValue("Cartridges", key->pItem));
@@ -274,10 +343,7 @@ void SetupDeathMark() {
 		_MESSAGE("Torso %f", torsoChance);
 		conditions.push_back(headChance);
 		conditions.push_back(torsoChance);
-		deathConditions.insert(std::pair<std::string, std::vector<float>>(*it, conditions));
-	}
 
-	for (auto it = cartridges.begin(); it != cartridges.end(); ++it) {
 		CSimpleIniA::TNamesDepend protectionKeys;
 		ini.GetAllKeys(it->c_str(), protectionKeys);
 		_MESSAGE("%s Protection Chances", it->c_str());
@@ -286,22 +352,118 @@ void SetupDeathMark() {
 			chances.push_back((uint16_t)std::stoi((ini.GetValue(it->c_str(), key->pItem))));
 			_MESSAGE("%d", std::stoi((ini.GetValue(it->c_str(), key->pItem))));
 		}
-		protectionChances.insert(std::pair<std::string, std::vector<uint16_t>>(*it, chances));
+		if (chances.size() < maxTier) {
+			_MESSAGE("Cartridge %s is missing some data! Auto filling...", it->c_str());
+			if (chances.size() == 0) {
+				for (int i = 0; i < maxTier; ++i) {
+					chances.push_back(0);
+				}
+			}
+			else {
+				for (int i = 0; i < maxTier - chances.size(); ++i) {
+					chances.push_back(chances[chances.size() - 1]);
+					_MESSAGE("%d", chances[chances.size() - 1]);
+				}
+			}
+		}
+		CartridgeData cd;
+		cd.deathConditions = conditions;
+		cd.protectionChances = chances;
+		cartridgeData.insert(std::pair<std::string, CartridgeData>(*it, cd));
+	}*/
+	playerForceKill = std::stoi(ini.GetValue("General", "PlayerForceKill")) > 0;
+	_MESSAGE("PlayerForceKill %d", playerForceKill);
+	_MESSAGE("Laser");
+	std::vector<float> laserConditions;
+	float headChance = std::stof(ini.GetValue("CartridgeFatalities", "LaserHead"));
+	_MESSAGE("Head %f", headChance);
+	float torsoChance = std::stof(ini.GetValue("CartridgeFatalities", "LaserTorso"));
+	_MESSAGE("Torso %f", torsoChance);
+	laserConditions.push_back(headChance);
+	laserConditions.push_back(torsoChance);
+	CSimpleIniA::TNamesDepend protectionKeys;
+	ini.GetAllKeys("Laser", protectionKeys);
+	std::vector<uint16_t> laserChances;
+	for (auto key = protectionKeys.begin(); key != protectionKeys.end(); ++key) {
+		laserChances.push_back((uint16_t)std::stoi((ini.GetValue("Laser", key->pItem))));
+		_MESSAGE("%d", std::stoi((ini.GetValue("Laser", key->pItem))));
 	}
+	if (laserChances.size() < maxTier) {
+		_MESSAGE("Cartridge %s is missing some data! Auto filling...", "Laser");
+		if (laserChances.size() == 0) {
+			for (int i = 0; i < maxTier; ++i) {
+				laserChances.push_back(0);
+			}
+		}
+		else {
+			for (int i = 0; i < maxTier - laserChances.size(); ++i) {
+				laserChances.push_back(laserChances[laserChances.size() - 1]);
+				_MESSAGE("%d", laserChances[laserChances.size() - 1]);
+			}
+		}
+	}
+	CartridgeData laserCd;
+	laserCd.deathConditions = laserConditions;
+	laserCd.protectionChances = laserChances;
+	cartridgeData.insert(std::pair<std::string, CartridgeData>(std::string("Laser"), laserCd));
+
+
+	_MESSAGE("Global");
+	gd.armorDamageInitial = std::stof(ini.GetValue("Global", "ArmorDamageInitial"));
+	gd.armorDamageMultiplier = std::stof(ini.GetValue("Global", "ArmorDamageMultiplier"));
+	gd.headFatality = std::stof(ini.GetValue("Global", "HeadFatality"));
+	gd.torsoFatality = std::stof(ini.GetValue("Global", "TorsoFatality"));
+	gd.formulaA = std::stof(ini.GetValue("Global", "FormulaA"));
+	gd.formulaB = std::stof(ini.GetValue("Global", "FormulaB"));
+	gd.formulaC = std::stof(ini.GetValue("Global", "FormulaC"));
+	gd.formulaD = std::stof(ini.GetValue("Global", "FormulaD"));
+	gd.PrintData();
+
+	std::vector<float> globalConditions;
+	globalConditions.push_back(gd.headFatality);
+	globalConditions.push_back(gd.torsoFatality);
+	std::vector<uint16_t> globalChances;
+	for (int i = 0; i < maxTier; ++i) {
+		globalChances.push_back(0);
+	}
+	CartridgeData globalCd;
+	globalCd.deathConditions = globalConditions;
+	globalCd.protectionChances = globalChances;
+	cartridgeData.insert(std::pair<std::string, CartridgeData>(std::string("Global"), globalCd));
+
 
 	deathmarked = GetAVIFByEditorID("EFD_DeathMark");
 	lasthitpart = GetAVIFByEditorID("EFD_LastHitPart");
 	perceptionCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036C);
 	enduranceCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036D);
+	leftAttackCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036E);
+	rightAttackCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036F);
+	leftMobilityCondition = (ActorValueInfo*)TESForm::GetFormByID(0x000370);
+	rightMobilityCondition = (ActorValueInfo*)TESForm::GetFormByID(0x000371);
 	brainCondition = (ActorValueInfo*)TESForm::GetFormByID(0x000372);
 	_MESSAGE("EFD_DeathMark %llx", deathmarked);
 	_MESSAGE("EFD_LastHitPart %llx", lasthitpart);
 
-	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	/*TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<EffectSetting*> mgefs = dh->GetFormArray<EffectSetting>();
 	for (auto it = mgefs.begin(); it != mgefs.end(); ++it) {
 		if (strncmp((*it)->GetFullName(), "EFDDeathMark", 12) == 0) {
 			deathmarkMGEFs.push_back((*it)->formID);
+		}
+	}*/
+
+	EFDDeathMarkGlobal = GetSpellByFullName("EFD DeathMark Global");
+	_MESSAGE("EFD DeathMark Global %llx", EFDDeathMarkGlobal);
+	for (auto it = EFDDeathMarkGlobal->listOfEffects.begin(); it != EFDDeathMarkGlobal->listOfEffects.end(); ++it) {
+		if (strncmp((*it)->effectSetting->GetFullName(), "EFDDeathMark", 12) == 0) {
+			deathmarkMGEFs.push_back((*it)->effectSetting->formID);
+		}
+	}
+	SpellItem* EFDDeathMarkLaser = GetSpellByFullName("EFD DeathMark Laser");
+	_MESSAGE("EFD DeathMark Laser %llx", EFDDeathMarkLaser);
+	for (auto it = EFDDeathMarkLaser->listOfEffects.begin(); it != EFDDeathMarkLaser->listOfEffects.end(); ++it) {
+		if (strncmp((*it)->effectSetting->GetFullName(), "EFDDeathMark", 12) == 0) {
+			deathmarkMGEFs.push_back((*it)->effectSetting->formID);
 		}
 	}
 }
@@ -309,75 +471,87 @@ void SetupDeathMark() {
 void SetupBleeding() {
 	BleedingData bldHead;
 	bldHead.spell = GetSpellByFullName(std::string("EFD Condition Bleed Head"));
+	bldHead.condition = std::stof(ini.GetValue("BleedingHead", "Condition"));
 	bldHead.initial = std::stof(ini.GetValue("BleedingHead", "Initial"));
 	bldHead.multiplier = std::stof(ini.GetValue("BleedingHead", "Multiplier"));
 	bldHead.duration = std::stof(ini.GetValue("BleedingHead", "Duration"));
 	for (auto it = bldHead.spell->listOfEffects.begin(); it != bldHead.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldHead.initial;
-		(*it)->data.duration = bldHead.duration;
+		(*it)->data.duration = (int32_t)floor(bldHead.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Head, bldHead));
 	_MESSAGE("_SpellConditionBleedHead %llx", bldHead.spell);
+	bldHead.PrintData();
 
 	BleedingData bldTorso;
 	bldTorso.spell = GetSpellByFullName(std::string("EFD Condition Bleed Torso"));
+	bldTorso.condition = std::stof(ini.GetValue("BleedingTorso", "Condition"));
 	bldTorso.initial = std::stof(ini.GetValue("BleedingTorso", "Initial"));
 	bldTorso.multiplier = std::stof(ini.GetValue("BleedingTorso", "Multiplier"));
 	bldTorso.duration = std::stof(ini.GetValue("BleedingTorso", "Duration"));
 	for (auto it = bldTorso.spell->listOfEffects.begin(); it != bldTorso.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldTorso.initial;
-		(*it)->data.duration = bldTorso.duration;
+		(*it)->data.duration = (int32_t)floor(bldTorso.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Torso, bldTorso));
 	_MESSAGE("_SpellConditionBleedTorso %llx", bldTorso.spell);
+	bldTorso.PrintData();
 
 	BleedingData bldLArm;
 	bldLArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed LArm"));
+	bldLArm.condition = std::stof(ini.GetValue("BleedingArm", "Condition"));
 	bldLArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
 	bldLArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldLArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
 	for (auto it = bldLArm.spell->listOfEffects.begin(); it != bldLArm.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldLArm.initial;
-		(*it)->data.duration = bldLArm.duration;
+		(*it)->data.duration = (int32_t)floor(bldLArm.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LArm, bldLArm));
 	_MESSAGE("_SpellConditionBleedLArm %llx", bldLArm.spell);
+	bldLArm.PrintData();
 
 	BleedingData bldLLeg;
 	bldLLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed LLeg"));
+	bldLLeg.condition = std::stof(ini.GetValue("BleedingLeg", "Condition"));
 	bldLLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
 	bldLLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldLLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
 	for (auto it = bldLLeg.spell->listOfEffects.begin(); it != bldLLeg.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldLLeg.initial;
-		(*it)->data.duration = bldLLeg.duration;
+		(*it)->data.duration = (int32_t)floor(bldLLeg.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LLeg, bldLLeg));
 	_MESSAGE("_SpellConditionBleedLLeg %llx", bldLLeg.spell);
+	bldLLeg.PrintData();
 
 	BleedingData bldRArm;
 	bldRArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed RArm"));
+	bldRArm.condition = std::stof(ini.GetValue("BleedingArm", "Condition"));
 	bldRArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
 	bldRArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldRArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
 	for (auto it = bldRArm.spell->listOfEffects.begin(); it != bldRArm.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldRArm.initial;
-		(*it)->data.duration = bldRArm.duration;
+		(*it)->data.duration = (int32_t)floor(bldRArm.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RArm, bldRArm));
 	_MESSAGE("_SpellConditionBleedRArm %llx", bldRArm.spell);
+	bldRArm.PrintData();
 
 	BleedingData bldRLeg;
 	bldRLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed RLeg"));
+	bldRLeg.condition = std::stof(ini.GetValue("BleedingLeg", "Condition"));
 	bldRLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
 	bldRLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldRLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
 	for (auto it = bldRLeg.spell->listOfEffects.begin(); it != bldRLeg.spell->listOfEffects.end(); ++it) {
 		(*it)->data.magnitude = bldRLeg.initial;
-		(*it)->data.duration = bldRLeg.duration;
+		(*it)->data.duration = (int32_t)floor(bldRLeg.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RLeg, bldRLeg));
 	_MESSAGE("_SpellConditionBleedRLeg %llx", bldRLeg.spell);
+	bldRLeg.PrintData();
 }
 
 #pragma endregion
@@ -435,6 +609,7 @@ void SetHelmetTier(Actor* a, uint16_t rating) {
 	}
 	if (!intervalFound)
 		a->SetActorValue(*helmetTier, 0);
+	//_MESSAGE("Helmet rating %d tier %f", rating, a->GetActorValue(*helmetTier));
 }
 
 void SetVestTier(Actor* a, uint16_t rating) {
@@ -449,6 +624,48 @@ void SetVestTier(Actor* a, uint16_t rating) {
 	}
 	if(!intervalFound)
 		a->SetActorValue(*vestTier, 0);
+	//_MESSAGE("Vest rating %d tier %f", rating, a->GetActorValue(*vestTier));
+}
+
+void CalculateArmorTiers(Actor* a) {
+	uint16_t vestAR = 0;
+	uint16_t helmetAR = 0;
+	if (!a->inventoryList) {
+		return;
+	}
+	for (auto invitem = a->inventoryList->data.begin(); invitem != a->inventoryList->data.end(); ++invitem) {
+		if (invitem->object->formType == ENUM_FORM_ID::kARMO) {
+			TESObjectARMO* invarmor = static_cast<TESObjectARMO*>(invitem->object);
+			TESObjectARMO::InstanceData* invdata = &(invarmor->data);
+			if (invitem->stackData->IsEquipped()) {
+				if (invarmor->bipedModelData.bipedObjectSlots & 0x800 || invarmor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
+					ExtraInstanceData* extraInstanceData = (ExtraInstanceData*)invitem->stackData->extra->GetByType(EXTRA_DATA_TYPE::kInstanceData);
+					uint16_t currentVestAR = 0;
+					if (extraInstanceData) {
+						currentVestAR = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get())->rating;
+					}
+					else {
+						currentVestAR = invdata->rating;
+					}
+					if (invarmor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
+						helmetAR = currentVestAR / 4;
+					}
+					vestAR += currentVestAR;
+				}
+				else if (invarmor->bipedModelData.bipedObjectSlots & 0x1) {	//Helmet exclusive
+					ExtraInstanceData* extraInstanceData = (ExtraInstanceData*)invitem->stackData->extra->GetByType(EXTRA_DATA_TYPE::kInstanceData);
+					if (extraInstanceData) {
+						helmetAR = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get())->rating;
+					}
+					else {
+						helmetAR = invdata->rating;
+					}
+				}
+			}
+		}
+	}
+	SetVestTier(a, vestAR);
+	SetHelmetTier(a, helmetAR);
 }
 
 class EquipWatcher : public BSTEventSink<TESEquipEvent> {
@@ -456,42 +673,7 @@ public:
 	virtual BSEventNotifyControl ProcessEvent(const TESEquipEvent& evn, BSTEventSource<TESEquipEvent>* a_source) {
 		TESForm* item = TESForm::GetFormByID(evn.formId);
 		if (item && item->formType == ENUM_FORM_ID::kARMO) {
-			TESObjectARMO* armor = static_cast<TESObjectARMO*>(item);
-			TESObjectARMO::InstanceData* data = &(armor->data);
-			if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
-				uint16_t vestAR = 0;
-				for (auto invitem = evn.a->inventoryList->data.begin(); invitem != evn.a->inventoryList->data.end(); ++invitem) {
-					if (invitem->stackData->IsEquipped()) {
-						if (invitem->object->formType == ENUM_FORM_ID::kARMO) {
-							TESObjectARMO* invarmor = static_cast<TESObjectARMO*>(invitem->object);
-							TESObjectARMO::InstanceData* invdata = &(armor->data);
-							if (invarmor->bipedModelData.bipedObjectSlots & 0x800 || invarmor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
-								if (evn.flag != 0x00000000ff000000 || (evn.flag == 0x00000000ff000000 && invarmor != armor)) {
-									vestAR += data->rating;
-								}
-							}
-						}
-					}
-				}
-				SetVestTier(evn.a, vestAR);
-				if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
-					uint16_t adjustedRating = data->rating / 4;
-					if (evn.flag == 0x00000000ff000000) {
-						evn.a->SetActorValue(*helmetTier, 0.0f);
-					}
-					else {
-						SetHelmetTier(evn.a, adjustedRating);
-					}
-				}
-			}
-			else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
-				if (evn.flag == 0x00000000ff000000) {
-					evn.a->SetActorValue(*helmetTier, 0.0f);
-				}
-				else {
-					SetHelmetTier(evn.a, data->rating);
-				}
-			}
+			CalculateArmorTiers(evn.a);
 		}
 		return BSEventNotifyControl::kContinue;
 	}
@@ -501,32 +683,13 @@ public:
 class ObjectLoadWatcher : public BSTEventSink<TESObjectLoadedEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESObjectLoadedEvent& evn, BSTEventSource<TESObjectLoadedEvent>* a_source) {
-		if (!evn.loaded) return BSEventNotifyControl::kContinue;
+		if (!evn.loaded) {
+			return BSEventNotifyControl::kContinue;
+		}
 		TESForm* form = TESForm::GetFormByID(evn.formId);
 		if (form && form->formType == ENUM_FORM_ID::kACHR) {
 			Actor* a = static_cast<Actor*>(form);
-			uint16_t vestAR = 0;
-			if (a->inventoryList) {
-				for (auto item = a->inventoryList->data.begin(); item != a->inventoryList->data.end(); ++item) {
-					if (item->stackData->IsEquipped()) {
-						if (item->object->formType == ENUM_FORM_ID::kARMO) {
-							TESObjectARMO* armor = static_cast<TESObjectARMO*>(item->object);
-							TESObjectARMO::InstanceData* data = &(armor->data);
-							if (armor->bipedModelData.bipedObjectSlots & 0x800 || armor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
-								vestAR += data->rating;
-								if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
-									uint16_t adjustedRating = data->rating / 4;
-									SetHelmetTier(a, adjustedRating);
-								}
-							}
-							else if (armor->bipedModelData.bipedObjectSlots & 0x7) {	//Helmet
-								SetHelmetTier(a, data->rating);
-							}
-						}
-					}
-				}
-				SetVestTier(a, vestAR);
-			}
+			CalculateArmorTiers(a);
 		}
 		return BSEventNotifyControl::kContinue;
 	}
@@ -539,47 +702,53 @@ public:
 	virtual BSEventNotifyControl ProcessEvent(const TESMagicEffectApplyEvent& evn, BSTEventSource<TESMagicEffectApplyEvent>* a_source) {
 		EffectSetting* mgef = static_cast<EffectSetting*>(TESForm::GetFormByID(evn.magicEffectFormID));
 		if (mgef->data.flags == 0x18008010 && mgef->data.castingType.underlying() == 1 && mgef->data.delivery.underlying() == 1) {
-			if (evn.caster != evn.target && evn.target->formType == ENUM_FORM_ID::kACHR) {
+			if (evn.target->formType == ENUM_FORM_ID::kACHR) {
 				Actor* a = ((Actor*)evn.target.get());
-				for (auto deathmark = deathmarkMGEFs.begin(); deathmark != deathmarkMGEFs.end(); ++deathmark) {
-					if (evn.magicEffectFormID == *deathmark) {
-						uintptr_t offset = 17;
-						if (strncmp(mgef->GetFullName() + 12, "Head", 4) == 0) {
-							offset = 16;
-						}
-						bool isTorso = offset - 16;
-						if ((isTorso && a->GetActorValue(*lasthitpart) == 2) || (!isTorso && a->GetActorValue(*lasthitpart) == 1)) {
-							std::string cartridge(mgef->GetFullName() + offset);
-							_MESSAGE("Processing DeathMark %s", cartridge.c_str());
-							auto dclookup = deathConditions.find(cartridge);
-							if (dclookup != deathConditions.end()) {
-								bool hasDeathChance = false;
-								if (isTorso) {
-									hasDeathChance = dclookup->second[1] >= a->GetActorValue(*enduranceCondition);
-									_MESSAGE("Torso condition %f current %f", dclookup->second[1], a->GetActorValue(*enduranceCondition));
-								}
-								else {
-									hasDeathChance = dclookup->second[0] >= a->GetActorValue(*perceptionCondition)
-										|| dclookup->second[0] >= a->GetActorValue(*brainCondition);
-									_MESSAGE("Head condition %f current %f", dclookup->second[0], a->GetActorValue(*perceptionCondition));
-								}
-								if (hasDeathChance) {
-									auto pclookup = protectionChances.find(cartridge);
-									if (pclookup != protectionChances.end()) {
+				if (a->GetActorValue(*lasthitpart) <= 2) {
+					for (auto deathmark = deathmarkMGEFs.begin(); deathmark != deathmarkMGEFs.end(); ++deathmark) {
+						if (evn.magicEffectFormID == *deathmark) {
+							uintptr_t offset = 17;
+							if (strncmp(mgef->GetFullName() + 12, "Head", 4) == 0) {
+								offset = 16;
+							}
+							bool isTorso = offset - 16;
+							if ((isTorso && a->GetActorValue(*lasthitpart) == 2) || (!isTorso && a->GetActorValue(*lasthitpart) == 1)) {
+								std::string cartridge(mgef->GetFullName() + offset);
+								_MESSAGE("Processing DeathMark %s", cartridge.c_str());
+								auto cdlookup = cartridgeData.find(cartridge);
+								if (cdlookup != cartridgeData.end()) {
+									bool hasDeathChance = false;
+									if (isTorso) {
+										hasDeathChance = cdlookup->second.deathConditions[1] >= a->GetActorValue(*enduranceCondition);
+										_MESSAGE("Torso condition %f current %f", cdlookup->second.deathConditions[1], a->GetActorValue(*enduranceCondition));
+									}
+									else {
+										hasDeathChance = cdlookup->second.deathConditions[0] >= a->GetActorValue(*perceptionCondition)
+											|| cdlookup->second.deathConditions[0] >= a->GetActorValue(*brainCondition);
+										_MESSAGE("Head condition %f current %f", cdlookup->second.deathConditions[0], a->GetActorValue(*perceptionCondition));
+									}
+									if (hasDeathChance) {
 										ActorValueInfo* avif = isTorso ? vestTier : helmetTier;
-										uint16_t chance = pclookup->second[(size_t)a->GetActorValue(*avif)];
+										uint16_t chance = cdlookup->second.protectionChances[(int)a->GetActorValue(*avif)];
 										std::mt19937 e{ rd() }; // or std::default_random_engine e{rd()};
 										std::uniform_int_distribution<uint16_t> dist{ 1, 100 };
 										uint16_t result = dist(e);
 										_MESSAGE("Protection Chance %d result %d", chance, result);
 										if (result > chance) {
 											killDeathMarked->Cast(a, a);
-											if(a == PlayerCharacter::GetSingleton())
+											if (a == PlayerCharacter::GetSingleton()) {
+												if (playerForceKill) {
+													a->KillImpl(a, 9999, true, false);
+												}
 												_MESSAGE("---Player killed by deathmark---");
+											}
+											else
+												_MESSAGE("%s(%llx) should be killed by deathmark", a->GetNPC()->fullName.c_str());
 										}
 									}
 								}
 							}
+							break; //Break if deathmark was found
 						}
 					}
 				}
@@ -637,20 +806,30 @@ public:
 
 	bool CheckPlayerHitBoneHardcoded() {
 		Projectile::ImpactData& ipct = this->impacts[0];
-		if (this->impacts.size() > 0 && !ipct.processed && ipct.collidee.get() && ipct.collidee.get().get()->formType == ENUM_FORM_ID::kACHR && ipct.colObj) {
+		float additionalDamage = 0;
+		if (this->weaponSource.instanceData) {
+			BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* dtArray =
+				static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->damageTypes;
+			if (dtArray) {
+				for (auto it = dtArray->begin(); it != dtArray->end(); ++it) {
+					additionalDamage += it->second.i;
+				}
+			}
+		}
+		float calculatedDamage = this->damage + additionalDamage;
+		if (calculatedDamage > 0 && this->impacts.size() > 0 && !ipct.processed && ipct.collidee.get() && ipct.collidee.get().get()->formType == ENUM_FORM_ID::kACHR && ipct.colObj) {
 			Actor* a = static_cast<Actor*>(ipct.collidee.get().get());
 			NiAVObject* parent = ipct.colObj.get()->sceneObject;
 			if (parent) {
-				if(a == PlayerCharacter::GetSingleton())
-					_MESSAGE("Player got hit on %s", parent->name.c_str());
+				_MESSAGE("Projectile %llx (formid %llx)", this, this->formID);
+
+				if (a == PlayerCharacter::GetSingleton())
+					_MESSAGE("%s(Player) got hit on %s", a->GetNPC()->fullName.c_str(), parent->name.c_str());
 				else
-					_MESSAGE("%llx got hit on %s", a, parent->name.c_str());
+					_MESSAGE("%s(%llx) got hit on %s", a->GetNPC()->fullName.c_str(), a, parent->name.c_str());
 				int partType = -1;
-				for (int i = 0; i < 26; ++i) {
-					BGSBodyPart* part = a->race->bodyPartData->partArray[i];
-					if (part && (parent->name == part->PartNode || parent->name == part->VATSTarget)) {
-						partType = i;
-					}
+				if (ipct.damageLimb.underlying() >= 0) {
+					partType = ipct.damageLimb.underlying();
 				}
 				if (partType == -1) {
 					if (parent->name == std::string_view("LArm_Hand")) {
@@ -663,35 +842,81 @@ public:
 						partType = 0;
 					}
 				}
+
 				TESAmmo* ammo = this->ammoSource;
 				if (ammo) {
 					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
-															  this->ammoSource->fullName.c_str(), this->ammoSource->formID,
-															  this->ammoSource->data.projectile->formID);
+								this->ammoSource->fullName.c_str(), this->ammoSource->formID,
+								this->ammoSource->data.projectile->formID);
 				}
 				else if (this->weaponSource.instanceData && this->weaponSource.object->formType == ENUM_FORM_ID::kWEAP) {
 					ammo = static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->ammo;
 					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
-															  ammo->fullName.c_str(), ammo->formID,
-															  ammo->data.projectile->formID);
+								ammo->fullName.c_str(), ammo->formID,
+								ammo->data.projectile->formID);
 				}
+
 				int partFound = 0;
-				for (auto torso = torsoParts.begin(); torso != torsoParts.end(); ++torso) {
-					if (partType == *torso) {
-						a->SetActorValue(*lasthitpart, 2);
-						partFound = 2;
-						_MESSAGE("Node : %s is Torso", parent->name.c_str());
+				int i = 0;
+				std::vector<BGSBodyPartData::PartType> partsList[] = { headParts, torsoParts, larmParts, llegParts, rarmParts, rlegParts };
+				while (partFound == 0 && i < 6) {
+					for (auto part = partsList[i].begin(); part != partsList[i].end(); ++part) {
+						if (partType == *part) {
+							a->SetActorValue(*lasthitpart, i + 1);
+							partFound = i + 1;
+						}
 					}
-				}
-				for (auto head = headParts.begin(); head != headParts.end(); ++head) {
-					if (partType == *head) {
-						a->SetActorValue(*lasthitpart, 1);
-						partFound = 1;
-						_MESSAGE("Node : %s is Head", parent->name.c_str());
-					}
+					++i;
 				}
 				if (!partFound) {
-					a->SetActorValue(*lasthitpart, 0);
+					a->SetActorValue(*lasthitpart, 7);
+				}
+				else {
+					_MESSAGE("Node : %s is %s (partType %d)", parent->name.c_str(), EFDBodyPartsName[partFound].c_str(), partType);
+					if (this->damage > 0 && !this->IsBeamProjectile()) {
+						_MESSAGE("Physical projectile with base damage %f", this->damage);
+						ActiveEffectList* aeList = a->GetActiveEffectList();
+						if (aeList) {
+							BleedingData& bld = bleedingConfigs.at((EFDBodyParts)partFound);
+							_MESSAGE("Bleeding condition %f current %f", bld.condition, a->GetActorValue(**EFDConditions[partFound]));
+							if (bld.condition >= a->GetActorValue(**EFDConditions[partFound])) {
+								ActiveEffect* bleedae = nullptr;
+								for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
+									ActiveEffect* ae = it->get();
+									if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive) && ae->item == bld.spell) {
+										bleedae = ae;
+										_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
+									}
+								}
+								float bleedmag = this->damage * bld.multiplier;
+								if (bleedae) {
+									bleedae->magnitude -= bleedmag;
+									bleedae->elapsed = 0;
+									_MESSAGE("Current bleeding magnitude %f", bleedae->magnitude * -1.0f);
+								}
+								else {
+									bld.spell->listOfEffects[0]->data.magnitude = bld.initial + bleedmag;
+									bld.spell->listOfEffects[1]->data.magnitude = bld.initial + bleedmag;
+									bld.spell->Cast(a, a);
+									_MESSAGE("Bleeding start magnitude %f", bld.initial + bleedmag);
+								}
+							}
+						}
+						else {
+							_MESSAGE("ActiveEffectList not found. Bleeding can't be processed");
+						}
+						if (this->shooter.get()) {
+							EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
+							_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
+							EFDDeathMarkGlobal->Cast(this->shooter.get().get(), a);
+						}
+					}
+				}
+				if (partFound <= 2) { //Only calculate this when needed.
+					CartridgeData& gcd = cartridgeData.at(std::string("Global"));
+					for (int j = 0; j < maxTier; ++j) {
+						gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.58823529f + gd.formulaD, 100), 0);
+					}
 				}
 			}
 		}
