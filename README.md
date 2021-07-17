@@ -6,6 +6,10 @@ Check out [CommonLibF4](https://github.com/Ryan-rsm-McKenzie/CommonLibF4) for th
 
 This project contains [nlohmann's JSON for Modern C++](https://github.com/nlohmann/json) licensed under the MIT License.
 
+# SimpleINI Library
+
+Some projects contain [brofield's SimpleINI](https://github.com/brofield/simpleini) licensed under the MIT License.
+
 # CommonLibF4
 
 ## General Requirements
