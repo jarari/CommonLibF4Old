@@ -73,6 +73,7 @@ conditionally_add_subdirectory(bullet3-3.17)
 conditionally_add_subdirectory(DeBadWeapons)
 conditionally_add_subdirectory(PlayerVoiceFrequency)
 conditionally_add_subdirectory(TacticalAction)
+conditionally_add_subdirectory(PUBGAiming)
 
 
 include(FetchContent)
