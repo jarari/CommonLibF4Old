@@ -75,6 +75,53 @@ REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
 uint64_t timer_sightEnter;
 uint64_t timer_sightExit;
 
+/*
+* f3rdPersonAimFOV:Camera
+* fDefault1stPersonFOV:Display
+*/
+Setting* TPAimFOV;
+Setting* FPFOV;
+
+void SightEnter() {
+	if (!p->currentProcess)
+		return;
+	BSTArray<EquippedItem>& equipped = p->currentProcess->middleHigh->equippedItems;
+	if (equipped.size() == 0 || !equipped[0].item.instanceData || 
+		((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type != 9)
+		return;
+
+	if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]) {
+		pcam->SetState(pcam->cameraStates[CameraState::kFirstPerson].get());
+		timer_sightEnter = *ptr_engineTime;
+		aiming = true;
+		p->SetInIronSightsImpl(true);
+		if (PUBGMode && pcam->fovAdjustPerSec != 0) {
+			float FOVOffset = FPFOV->GetFloat() - TPAimFOV->GetFloat();
+			pcam->fovAdjustTarget += FOVOffset;
+			if ((pcam->fovAdjustTarget - pcam->fovAdjustCurrent) * pcam->fovAdjustPerSec < 0) {
+				pcam->fovAdjustPerSec *= -1.0f;
+			}
+			pcam->fovAdjustCurrent = pcam->fovAdjustTarget;
+			*(float*)((uintptr_t)pcam->cameraStates[CameraState::kFirstPerson].get() + 0x78) = 1.0f;
+		}
+	}
+}
+
+void SightExit(bool switchCam = true) {
+	if (!p->currentProcess)
+		return;
+	BSTArray<EquippedItem>& equipped = p->currentProcess->middleHigh->equippedItems;
+	if (equipped.size() == 0 || !equipped[0].item.instanceData ||
+		((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type != 9)
+		return;
+
+	if (switchCam) {
+		pcam->SetState(pcam->cameraStates[CameraState::k3rdPerson].get());
+	}
+	timer_sightExit = *ptr_engineTime;
+	aiming = false;
+}
+
 using std::unordered_map;
 class AnimationGraphEventWatcher : public BSTEventSink<BSAnimationGraphEvent> {
 public:
@@ -83,35 +130,28 @@ public:
 	BSEventNotifyControl HookedProcessEvent(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* src) {
 		if (!PUBGMode) {
 			if (evn.animEvent == std::string("sightedStateEnter")) {
-				if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]) {
-					pcam->SetState(pcam->cameraStates[CameraState::kFirstPerson].get());
-					timer_sightEnter = *ptr_engineTime;
-					aiming = true;
-				}
+				SightEnter();
 			}
 			else if (aiming) {
-				if (*ptr_engineTime - timer_sightEnter < 10000) {
-					pcam->fovAdjustCurrent = pcam->fovAdjustTarget;
-					pcam->adjustFOV = false;
-					*(float*)((uintptr_t)pcam->cameraStates[CameraState::kFirstPerson].get() + 0x78) = 1.0f;
-				}
-				if (p->gunState != 6 && *ptr_engineTime - timer_sightEnter > 5000) {
-					if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
-						pcam->SetState(pcam->cameraStates[CameraState::k3rdPerson].get());
-					}
-					pcam->adjustFOV = true;
-					timer_sightExit = *ptr_engineTime;
-					aiming = false;
+				if ((p->gunState != 6 && p->gunState != 8) && *ptr_engineTime - timer_sightEnter > 5000) {
+					SightExit();
 				}
 			}
 		}
 		else {
 			if (aiming) {
-				if (*ptr_engineTime - timer_sightEnter < 10000) {
-					pcam->fovAdjustCurrent = pcam->fovAdjustTarget;
-					pcam->adjustFOV = false;
-					*(float*)((uintptr_t)pcam->cameraStates[CameraState::kFirstPerson].get() + 0x78) = 1.0f;
+				if (p->gunState == 0x4) { //Reloading
+					SightExit();
 				}
+			}
+		}
+		if (aiming) {
+			if (*ptr_engineTime - timer_sightEnter < 10000) {
+				pcam->fovAdjustCurrent = pcam->fovAdjustTarget;
+				*(float*)((uintptr_t)pcam->cameraStates[CameraState::kFirstPerson].get() + 0x78) = 1.0f;
+			}
+			if (p->gunState == 0x7) { //Grenade throw?
+				SightExit();
 			}
 		}
 		FnProcessEvent fn = fnHash.at(*(uint64_t*)this);
@@ -195,12 +235,7 @@ public:
 
 		if (!aiming) {
 			if (id == zoomKey && evn->value == 0) {
-				if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]) {
-					pcam->SetState(pcam->cameraStates[CameraState::kFirstPerson].get());
-					timer_sightEnter = *ptr_engineTime;
-					p->SetInIronSightsImpl(true);
-					aiming = true;
-				}
+				SightEnter();
 			}
 		}
 		else {
@@ -208,15 +243,12 @@ public:
 				if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
 					if (id == sprintKey) {
 						waitSprint = true;
+						SightExit(false);
 					}
 					else {
-						pcam->SetState(pcam->cameraStates[CameraState::k3rdPerson].get());
+						SightExit();
 					}
 				}
-				pcam->adjustFOV = true;
-				timer_sightExit = *ptr_engineTime;
-				aiming = false;
-				p->SetInIronSightsImpl(false);
 			}
 		}
 
@@ -264,6 +296,16 @@ void InitializePlugin() {
 	((InputEventReceiverOverride*)((uint64_t)pcam + 0x38))->HookSink();
 	_MESSAGE("PlayerCharacter %llx", p);
 	_MESSAGE("PlayerCamera %llx", pcam);
+	for (auto it = INISettingCollection::GetSingleton()->settings.begin(); it != INIPrefSettingCollection::GetSingleton()->settings.end(); ++it) {
+		if (strcmp((*it)->_key, "f3rdPersonAimFOV:Camera") == 0) {
+			TPAimFOV = *it;
+			_MESSAGE("Setting %s", (*it)->_key);
+		}
+		else if (strcmp((*it)->_key, "fDefault1stPersonFOV:Display") == 0) {
+			FPFOV = *it;
+			_MESSAGE("Setting %s", (*it)->_key);
+		}
+	}
 }
 
 void LoadConfigs() {
