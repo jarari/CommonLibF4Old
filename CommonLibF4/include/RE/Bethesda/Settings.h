@@ -204,7 +204,6 @@ namespace RE
 			_value.u = a_value;
 		}
 
-	private:
 		// members
 		SETTING_VALUE _value;  // 08
 		const char* _key;      // 10

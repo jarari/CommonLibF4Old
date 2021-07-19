@@ -144,6 +144,8 @@ namespace RE
 				}
 			}
 
+			bool operator<(const BSFixedString& lhs) const { return data() < lhs.data(); }
+
 		protected:
 			template <class>
 			friend struct RE::BSCRC32;
