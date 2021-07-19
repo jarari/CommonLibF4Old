@@ -69,11 +69,11 @@ conditionally_add_subdirectory(DoomFist)
 conditionally_add_subdirectory(ShieldFramework)
 conditionally_add_subdirectory(AVF)
 conditionally_add_subdirectory(DragonBlade)
-conditionally_add_subdirectory(bullet3-3.17)
 conditionally_add_subdirectory(DeBadWeapons)
 conditionally_add_subdirectory(PlayerVoiceFrequency)
 conditionally_add_subdirectory(TacticalAction)
 conditionally_add_subdirectory(PUBGAiming)
+conditionally_add_subdirectory(AmmoUIHelper)
 
 
 include(FetchContent)
