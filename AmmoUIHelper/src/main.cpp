@@ -1,6 +1,47 @@
 #include <Windows.h>
 using namespace RE;
 
+class BSTGlobalEvent {
+public:
+	virtual ~BSTGlobalEvent();
+
+	template <typename T>
+	class EventSource {
+	public:
+		virtual ~EventSource();
+
+		// void ** _vtbl;                           // 00
+		uint64_t unk08;              // 08
+		BSTEventSource<T> src;    // 10
+	};
+
+	// void ** _vtbl;                               // 00
+	uint64_t    unk08;                                // 08
+	uint64_t    unk10;                                // 10
+	BSTArray<EventSource<void*>*> eventSources;       // 18
+};
+
+REL::Relocation<BSTGlobalEvent**> g_globalEvents{ REL::ID(1424022) };
+
+const static std::string ammoUIName{ "F4ammouiEXPANDEDMenu" };
+const F4SE::TaskInterface* g_task;
+
+PlayerCharacter* p;
+TESGlobal* enableAmmoUI;
+bool HUDHooked = false;
+bool ammoEventHooked = false;
+bool queueUpdate = false;
+bool isRegistered = false;
+std::vector<std::string> hideMenuList = { "BarterMenu", "ContainerMenu", "CookingMenu", "CreditsMenu", "DialogueMenu", "ExamineMenu",
+											"LockpickingMenu", "LooksMenu", "MessageBoxMenu", "PauseMenu", "PipboyMenu", "PromptMenu",
+											"SPECIALMenu", "TerminalHolotapeMenu", "TerminalMenu", "VATSMenu", "WorkshopMenu",
+											"F4QMWMenu" };
+int hideCount = 0;
+int PACount = 0;
+REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
+uint64_t updateRequestTime;
+uint32_t lastAmmoCount = 0;
+
 #pragma region Utilities
 
 char tempbuf[8192] = { 0 };
@@ -16,8 +57,8 @@ char* _MESSAGE(const char* fmt, ...) {
 }
 
 void Dump(const void* mem, unsigned int size) {
-	const char* p = static_cast<const char*>(mem);
-	unsigned char* up = (unsigned char*)p;
+	const char* ptr = static_cast<const char*>(mem);
+	unsigned char* up = (unsigned char*)ptr;
 	std::stringstream stream;
 	int row = 0;
 	for (unsigned int i = 0; i < size; i++) {
@@ -84,35 +125,21 @@ TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
 	return TESForm::GetFormByID(id);
 }
 
-#pragma warning (push)
-#pragma warning (disable : 4200)
-struct RTTIType {
-	void* typeInfo;
-	uint64_t	data;
-	char	name[0];
-};
-
-struct RTTILocator {
-	uint32_t		sig, offset, cdOffset;
-	uint32_t		typeDesc;
-	uint32_t		classDesc;
-};
-#pragma warning (pop)
-
 const char* GetObjectClassNameImpl(const char* result, void* objBase) {
+	using namespace RTTI;
 	void** obj = (void**)objBase;
-	RTTILocator** vtbl = (RTTILocator**)obj[0];
-	RTTILocator* rtti = vtbl[-1];
-	uint64_t typeDesc = rtti->typeDesc;
-	REL::Relocation<RTTIType*> type((REL::Offset)typeDesc);
+	CompleteObjectLocator** vtbl = (CompleteObjectLocator**)obj[0];
+	CompleteObjectLocator* rtti = vtbl[-1];
+	RVA<TypeDescriptor> typeDesc = rtti->typeDescriptor;
 
 	// starts with ,?
-	if ((type->name[0] == '.') && (type->name[1] == '?')) {
+	const char* _name = typeDesc->mangled_name();
+	if ((_name[0] == '.') && (_name[1] == '?')) {
 		// is at most 100 chars long
 		for (uint32_t i = 0; i < 100; i++) {
-			if (type->name[i] == 0) {
+			if (_name[i] == 0) {
 				// remove the .?AV
-				return type->name + 4;
+				return _name + 4;
 				break;
 			}
 		}
@@ -132,47 +159,14 @@ const char* GetObjectClassName(void* objBase) {
 	return result;
 }
 
+bool CheckPA() {
+	if (!p->extraList) {
+		return false;
+	}
+	return p->extraList->HasType(EXTRA_DATA_TYPE::kPowerArmor);;
+}
+
 #pragma endregion
-
-class BSTGlobalEvent {
-public:
-	virtual ~BSTGlobalEvent();
-
-	template <typename T>
-	class EventSource {
-	public:
-		virtual ~EventSource();
-
-		// void ** _vtbl;                           // 00
-		uint64_t unk08;              // 08
-		BSTEventSource<T> src;    // 10
-	};
-
-	// void ** _vtbl;                               // 00
-	uint64_t    unk08;                                // 08
-	uint64_t    unk10;                                // 10
-	BSTArray<EventSource<void*>*> eventSources;       // 18
-};
-
-REL::Relocation<BSTGlobalEvent**> g_globalEvents{ REL::ID(1424022) };
-
-const static std::string ammoUIName{ "F4ammouiEXPANDEDMenu" };
-const F4SE::TaskInterface* g_task;
-
-PlayerCharacter* p;
-TESGlobal* enableAmmoUI;
-//bool HUDHooked = false;
-bool ammoEventHooked = false;
-bool queueUpdate = false;
-bool isRegistered = false;
-std::vector<std::string> hideMenuList = { "BarterMenu", "ContainerMenu", "CookingMenu", "CreditsMenu", "DialogueMenu", "ExamineMenu",
-											"LockpickingMenu", "LooksMenu", "MessageBoxMenu", "PauseMenu", "PipboyMenu", "PromptMenu",
-											"SPECIALMenu", "TerminalHolotapeMenu", "TerminalMenu", "VATSMenu", "WorkshopMenu", "F4QMWMenu"
-											};
-int hideCount = 0;
-REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
-uint64_t updateRequestTime;
-uint32_t lastAmmoCount = 0;
 
 /*class HUDMenuOverride : public IMenu {
 public:
@@ -183,8 +177,10 @@ public:
 		if (msgQ && enableAmmoUI->value) {
 			msgQ->AddMessage(ammoUIName, a_message.type.get());
 			if (a_message.type.get() == UI_MESSAGE_TYPE::kShow || a_message.type.get() == UI_MESSAGE_TYPE::kReshow) {
+				_MESSAGE("PowerArmorHUDMenu Show");
 			}
 			else if (a_message.type.get() == UI_MESSAGE_TYPE::kHide || a_message.type.get() == UI_MESSAGE_TYPE::kForceHide) {
+				_MESSAGE("PowerArmorHUDMenu Hide");
 			}
 		}
 		FnProcessMessage fn = fnHash.at(*(uint64_t*)this);
@@ -469,10 +465,11 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 					HUDHooked = true;
 				}
 			}*/
-			if (evn.opening && enableAmmoUI->value && !ui->GetMenu(ammoUIName).get() && !ui->GetMenuOpen(ammoUIName)) {
-				AmmoUI::Register();
-				if (msgQ) {
-					msgQ->AddMessage(ammoUIName, RE::UI_MESSAGE_TYPE::kShow);
+			if (enableAmmoUI->value) {
+				if (evn.opening) {
+					if (!ui->GetMenu(ammoUIName).get() && !ui->GetMenuOpen(ammoUIName)) {
+						AmmoUI::Register();
+					}
 				}
 			}
 		}
@@ -485,7 +482,17 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 			}
 		}
 		else if (evn.menuName == BSFixedString("LoadingMenu") && !evn.opening) {
+			_MESSAGE("Load complete. Resetting hideCount");
 			hideCount = 0;
+			UI* ui = UI::GetSingleton();
+			for (auto it = hideMenuList.begin(); it != hideMenuList.end(); ++it) {
+				if (ui->GetMenuOpen(*it)) {
+					++hideCount;
+					_MESSAGE("%s ++", (*it).c_str());
+				}
+			}
+			PACount = CheckPA();
+			_MESSAGE("Final hideCount %d PACount %d", hideCount, PACount);
 			if (!ammoEventHooked) {
 				AmmoEventWatcher* aew = new AmmoEventWatcher();
 				AmmoEventWatcher::GetEventSource()->RegisterSink(aew);
@@ -507,7 +514,7 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 				}
 			}
 			if (isRegistered && msgQ) {
-				if (hideCount > 0) {
+				if (hideCount + PACount > 0) {
 					msgQ->AddMessage(ammoUIName, RE::UI_MESSAGE_TYPE::kHide);
 				}
 				else {
@@ -521,19 +528,49 @@ public:
 	F4_HEAP_REDEFINE_NEW(MenuWatcher);
 };
 
+class PlayerDeathWatcher : public BSTEventSink<BGSActorDeathEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const BGSActorDeathEvent& evn, BSTEventSource<BGSActorDeathEvent>* src) override {
+		_MESSAGE("Player Death");
+		if (enableAmmoUI->value) {
+			UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
+			if (isRegistered && msgQ) {
+				msgQ->AddMessage(ammoUIName, RE::UI_MESSAGE_TYPE::kHide);
+				++hideCount;
+			}
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+public:
+	F4_HEAP_REDEFINE_NEW(PlayerDeathWatcher);
+};
+
 class AnimationGraphEventWatcher : public BSTEventSink<BSAnimationGraphEvent> {
 public:
 	typedef BSEventNotifyControl (AnimationGraphEventWatcher::* FnProcessEvent)(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* dispatcher);
 
 	BSEventNotifyControl HookedProcessEvent(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* src) {
-		//_MESSAGE("evn %s argu %s", evn.animEvent.c_str(), evn.argument.c_str());
-		if (queueUpdate && *ptr_engineTime - updateRequestTime > 2000) {
-			AmmoUI::SetAmmoCount(1);
-			queueUpdate = false;
-		}
-		if (evn.animEvent == std::string("weaponFire") && evn.argument == std::string("2")) {
-			queueUpdate = true;
-			updateRequestTime = *ptr_engineTime;
+		//_MESSAGE("evn %s argu %s PACheck %d", evn.animEvent.c_str(), evn.argument.c_str(), CheckPA());
+		if (enableAmmoUI->value) {
+			if (queueUpdate && *ptr_engineTime - updateRequestTime > 2000) {
+				AmmoUI::SetAmmoCount(1);
+				queueUpdate = false;
+			}
+			if (evn.animEvent == std::string("weaponFire") && evn.argument == std::string("2")) {
+				queueUpdate = true;
+				updateRequestTime = *ptr_engineTime;
+			}
+			else if (evn.animEvent == std::string("GraphDeleting") || evn.animEvent == std::string("FurnitureOff")) {
+				PACount = CheckPA();
+				UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
+				if (isRegistered && msgQ) {
+					if (hideCount + PACount > 0) {
+						msgQ->AddMessage(ammoUIName, RE::UI_MESSAGE_TYPE::kHide);
+					}
+					else {
+						msgQ->AddMessage(ammoUIName, RE::UI_MESSAGE_TYPE::kShow);
+					}
+				}
+			}
 		}
 		FnProcessEvent fn = fnHash.at(*(uint64_t*)this);
 		return fn ? (this->*fn)(evn, src) : BSEventNotifyControl::kContinue;
@@ -568,6 +605,8 @@ void InitializePlugin() {
 	enableAmmoUI = (TESGlobal*)GetFormFromMod("ammoUI_by_tooun.esl", 0x11801);
 	MenuWatcher* mw = new MenuWatcher();
 	UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mw);
+	PlayerDeathWatcher* pdw = new PlayerDeathWatcher();
+	((BSTEventSource<BGSActorDeathEvent>*)p)->RegisterSink(pdw);
 }
 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
