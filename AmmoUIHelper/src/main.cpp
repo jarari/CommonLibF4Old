@@ -284,7 +284,7 @@ public:
 
 			//size_t bufLength = ac1.size() + ac2.size() + ec.size() + as.size() + 3;
 			char buf[24];
-			sprintf_s(buf, sizeof(buf), "%d,%d,%s,%s", current, total, ec.data(), as.data());
+			sprintf_s(buf, sizeof(buf), "%d,%d,%s,%s", current > 999 ? 999 : current, total > 999 ? 999 : total, ec.data(), as.data());
 			if (ammoUI->uiMovie) {
 				Scaleform::GFx::Value ammoUICount;
 				ammoUI->uiMovie->asMovieRoot->CreateString(&ammoUICount, buf);
