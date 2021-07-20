@@ -125,6 +125,17 @@ TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
 	return TESForm::GetFormByID(id);
 }
 
+TESGlobal* GetGlobalByEditorID(std::string editorID) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<TESGlobal*> globals = dh->GetFormArray<TESGlobal>();
+	for (auto it = globals.begin(); it != globals.end(); ++it) {
+		if (strcmp((*it)->formEditorID.c_str(), editorID.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
 const char* GetObjectClassNameImpl(const char* result, void* objBase) {
 	using namespace RTTI;
 	void** obj = (void**)objBase;
@@ -602,7 +613,8 @@ std::unordered_map<uint64_t, AnimationGraphEventWatcher::FnProcessEvent> Animati
 void InitializePlugin() {
 	p = PlayerCharacter::GetSingleton();
 	((AnimationGraphEventWatcher*)((uint64_t)p + 0x38))->HookSink();
-	enableAmmoUI = (TESGlobal*)GetFormFromMod("ammoUI_by_tooun.esl", 0x11801);
+	enableAmmoUI = GetGlobalByEditorID(std::string("GLOBEnabled"));
+	_MESSAGE("GLOBEnabled %llx", enableAmmoUI);
 	MenuWatcher* mw = new MenuWatcher();
 	UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mw);
 	PlayerDeathWatcher* pdw = new PlayerDeathWatcher();
