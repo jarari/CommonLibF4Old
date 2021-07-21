@@ -81,6 +81,7 @@ uint64_t timer_sightExit;
 */
 Setting* TPAimFOV;
 Setting* FPFOV;
+TESIdleForm* FPSighted;
 
 void SightEnter() {
 	if (!p->currentProcess)
@@ -142,6 +143,12 @@ public:
 			if (aiming) {
 				if (p->gunState == 0x4) { //Reloading
 					SightExit();
+				}
+				else if (p->gunState == 0 && pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
+					if (p->currentProcess) {
+						p->SetInIronSightsImpl(false);
+						p->currentProcess->PlayIdle(p, 0x35, FPSighted);
+					}
 				}
 			}
 		}
@@ -306,6 +313,7 @@ void InitializePlugin() {
 			_MESSAGE("Setting %s", (*it)->_key);
 		}
 	}
+	FPSighted = (TESIdleForm*)TESForm::GetFormByID(0x4D32);
 }
 
 void LoadConfigs() {
