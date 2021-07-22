@@ -119,6 +119,7 @@ ActorValueInfo* rightAttackCondition;
 ActorValueInfo* leftMobilityCondition;
 ActorValueInfo* rightMobilityCondition;
 ActorValueInfo* brainCondition;
+ActorValueInfo* health;
 EffectSetting* headHitMarkMGEF;
 EffectSetting* torsoHitMarkMGEF;
 SpellItem* headHitMark;
@@ -434,6 +435,7 @@ void SetupDeathMark() {
 
 	deathmarked = GetAVIFByEditorID("EFD_DeathMark");
 	lasthitpart = GetAVIFByEditorID("EFD_LastHitPart");
+	health = (ActorValueInfo*)TESForm::GetFormByID(0x0002D4);
 	perceptionCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036C);
 	enduranceCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036D);
 	leftAttackCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036E);
@@ -740,7 +742,7 @@ public:
 												if (playerForceKill) {
 													a->KillImpl(a, 9999, true, false);
 												}
-												_MESSAGE("---Player killed by deathmark---");
+												_MESSAGE("---Player Killed by DeathMark---");
 											}
 											else
 												_MESSAGE("%s(%llx) should be killed by deathmark", a->GetNPC()->fullName.c_str());
@@ -757,6 +759,36 @@ public:
 		return BSEventNotifyControl::kContinue;
 	}
 	F4_HEAP_REDEFINE_NEW(MGEFWatcher);
+};
+
+class PlayerDeathWatcher : public BSTEventSink<BGSActorDeathEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const BGSActorDeathEvent& evn, BSTEventSource<BGSActorDeathEvent>* src) override {
+		_MESSAGE("---Player Death---");
+		PlayerCharacter* p = PlayerCharacter::GetSingleton();
+		ActiveEffectList* aeList = p->GetActiveEffectList();
+		if (aeList) {
+			for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
+				ActiveEffect* ae = it->get();
+				if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive)) {
+					EffectSetting* avEffectSetting = *(EffectSetting**)((uint64_t)(it->get()->effect) + 0x10);
+					if (avEffectSetting && avEffectSetting->data.primaryAV == health) {
+						_MESSAGE("Active Effect : %s with magnitude %f", avEffectSetting->fullName.c_str(), ae->magnitude);
+					}
+				}
+			}
+		}
+		_MESSAGE("Head Condition\t%f", p->GetActorValue(*perceptionCondition));
+		_MESSAGE("Torso Condition\t%f", p->GetActorValue(*enduranceCondition));
+		_MESSAGE("LArm Condition\t%f", p->GetActorValue(*leftAttackCondition));
+		_MESSAGE("LLeg Condition\t%f", p->GetActorValue(*leftMobilityCondition));
+		_MESSAGE("RArm Condition\t%f", p->GetActorValue(*rightAttackCondition));
+		_MESSAGE("RLeg Condition\t%f", p->GetActorValue(*rightMobilityCondition));
+		_MESSAGE("Last Health remaining\t%f", evn.lastHealth);
+		_MESSAGE("Last Damage taken\t%f", evn.damageTaken);
+		return BSEventNotifyControl::kContinue;
+	}
+public:
+	F4_HEAP_REDEFINE_NEW(PlayerDeathWatcher);
 };
 
 #pragma endregion
@@ -1027,6 +1059,10 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 
 			MGEFWatcher* mw = new MGEFWatcher();
 			MGEFApplyEventSource::GetSingleton()->RegisterSink(mw);
+
+			PlayerCharacter* p = PlayerCharacter::GetSingleton();
+			PlayerDeathWatcher* pdw = new PlayerDeathWatcher();
+			((BSTEventSource<BGSActorDeathEvent>*)p)->RegisterSink(pdw);
 		}
 	});
 
