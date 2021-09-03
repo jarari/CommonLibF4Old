@@ -165,13 +165,19 @@ ActorValueInfo** EFDConditions[] = {
 
 struct BleedingData {
 	SpellItem* spell;
-	float condition;
-	float initial;
+	float conditionStart;
+	float conditionThreshold;
+	float chanceMin;
+	float chanceMax;
+	float initialDamage;
 	float multiplier;
 	float duration;
 	void PrintData() {
-		_MESSAGE("Condition %f", condition);
-		_MESSAGE("Initial %f", initial);
+		_MESSAGE("Condition Start %f", conditionStart);
+		_MESSAGE("Condition Threshold %f", conditionThreshold);
+		_MESSAGE("Chance Min %f", chanceMin);
+		_MESSAGE("Chance Max %f", chanceMax);
+		_MESSAGE("Initial Damage %f", initialDamage);
 		_MESSAGE("Multiplier %f", multiplier);
 		_MESSAGE("Duration %f", duration);
 	}
@@ -473,12 +479,15 @@ void SetupDeathMark() {
 void SetupBleeding() {
 	BleedingData bldHead;
 	bldHead.spell = GetSpellByFullName(std::string("EFD Condition Bleed Head"));
-	bldHead.condition = std::stof(ini.GetValue("BleedingHead", "Condition"));
-	bldHead.initial = std::stof(ini.GetValue("BleedingHead", "Initial"));
+	bldHead.conditionStart = std::stof(ini.GetValue("BleedingHead", "ConditionStart"));
+	bldHead.conditionThreshold = std::stof(ini.GetValue("BleedingHead", "ConditionThreshold"));
+	bldHead.chanceMin = std::stof(ini.GetValue("BleedingHead", "ChanceMin"));
+	bldHead.chanceMax = std::stof(ini.GetValue("BleedingHead", "ChanceMax"));
+	bldHead.initialDamage = std::stof(ini.GetValue("BleedingHead", "InitialDamage"));
 	bldHead.multiplier = std::stof(ini.GetValue("BleedingHead", "Multiplier"));
 	bldHead.duration = std::stof(ini.GetValue("BleedingHead", "Duration"));
 	for (auto it = bldHead.spell->listOfEffects.begin(); it != bldHead.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldHead.initial;
+		(*it)->data.magnitude = bldHead.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldHead.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Head, bldHead));
@@ -487,12 +496,14 @@ void SetupBleeding() {
 
 	BleedingData bldTorso;
 	bldTorso.spell = GetSpellByFullName(std::string("EFD Condition Bleed Torso"));
-	bldTorso.condition = std::stof(ini.GetValue("BleedingTorso", "Condition"));
-	bldTorso.initial = std::stof(ini.GetValue("BleedingTorso", "Initial"));
+	bldTorso.conditionThreshold = std::stof(ini.GetValue("BleedingTorso", "ConditionThreshold"));
+	bldTorso.chanceMin = std::stof(ini.GetValue("BleedingTorso", "ChanceMin"));
+	bldTorso.chanceMax = std::stof(ini.GetValue("BleedingTorso", "ChanceMax"));
+	bldTorso.initialDamage = std::stof(ini.GetValue("BleedingTorso", "InitialDamage"));
 	bldTorso.multiplier = std::stof(ini.GetValue("BleedingTorso", "Multiplier"));
 	bldTorso.duration = std::stof(ini.GetValue("BleedingTorso", "Duration"));
 	for (auto it = bldTorso.spell->listOfEffects.begin(); it != bldTorso.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldTorso.initial;
+		(*it)->data.magnitude = bldTorso.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldTorso.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::Torso, bldTorso));
@@ -501,12 +512,14 @@ void SetupBleeding() {
 
 	BleedingData bldLArm;
 	bldLArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed LArm"));
-	bldLArm.condition = std::stof(ini.GetValue("BleedingArm", "Condition"));
-	bldLArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
+	bldLArm.conditionThreshold = std::stof(ini.GetValue("BleedingArm", "ConditionThreshold"));
+	bldLArm.chanceMin = std::stof(ini.GetValue("BleedingArm", "ChanceMin"));
+	bldLArm.chanceMax = std::stof(ini.GetValue("BleedingArm", "ChanceMax"));
+	bldLArm.initialDamage = std::stof(ini.GetValue("BleedingArm", "InitialDamage"));
 	bldLArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldLArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
 	for (auto it = bldLArm.spell->listOfEffects.begin(); it != bldLArm.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldLArm.initial;
+		(*it)->data.magnitude = bldLArm.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldLArm.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LArm, bldLArm));
@@ -515,12 +528,14 @@ void SetupBleeding() {
 
 	BleedingData bldLLeg;
 	bldLLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed LLeg"));
-	bldLLeg.condition = std::stof(ini.GetValue("BleedingLeg", "Condition"));
-	bldLLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
+	bldLLeg.conditionThreshold = std::stof(ini.GetValue("BleedingLeg", "ConditionThreshold"));
+	bldLLeg.chanceMin = std::stof(ini.GetValue("BleedingLeg", "ChanceMin"));
+	bldLLeg.chanceMax = std::stof(ini.GetValue("BleedingLeg", "ChanceMax"));
+	bldLLeg.initialDamage = std::stof(ini.GetValue("BleedingLeg", "InitialDamage"));
 	bldLLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldLLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
 	for (auto it = bldLLeg.spell->listOfEffects.begin(); it != bldLLeg.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldLLeg.initial;
+		(*it)->data.magnitude = bldLLeg.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldLLeg.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::LLeg, bldLLeg));
@@ -529,12 +544,14 @@ void SetupBleeding() {
 
 	BleedingData bldRArm;
 	bldRArm.spell = GetSpellByFullName(std::string("EFD Condition Bleed RArm"));
-	bldRArm.condition = std::stof(ini.GetValue("BleedingArm", "Condition"));
-	bldRArm.initial = std::stof(ini.GetValue("BleedingArm", "Initial"));
+	bldRArm.conditionThreshold = std::stof(ini.GetValue("BleedingArm", "ConditionThreshold"));
+	bldRArm.chanceMin = std::stof(ini.GetValue("BleedingArm", "ChanceMin"));
+	bldRArm.chanceMax = std::stof(ini.GetValue("BleedingArm", "ChanceMax"));
+	bldRArm.initialDamage = std::stof(ini.GetValue("BleedingArm", "InitialDamage"));
 	bldRArm.multiplier = std::stof(ini.GetValue("BleedingArm", "Multiplier"));
 	bldRArm.duration = std::stof(ini.GetValue("BleedingArm", "Duration"));
 	for (auto it = bldRArm.spell->listOfEffects.begin(); it != bldRArm.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldRArm.initial;
+		(*it)->data.magnitude = bldRArm.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldRArm.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RArm, bldRArm));
@@ -543,12 +560,14 @@ void SetupBleeding() {
 
 	BleedingData bldRLeg;
 	bldRLeg.spell = GetSpellByFullName(std::string("EFD Condition Bleed RLeg"));
-	bldRLeg.condition = std::stof(ini.GetValue("BleedingLeg", "Condition"));
-	bldRLeg.initial = std::stof(ini.GetValue("BleedingLeg", "Initial"));
+	bldRLeg.conditionThreshold = std::stof(ini.GetValue("BleedingLeg", "ConditionThreshold"));
+	bldRLeg.chanceMin = std::stof(ini.GetValue("BleedingLeg", "ChanceMin"));
+	bldRLeg.chanceMax = std::stof(ini.GetValue("BleedingLeg", "ChanceMax"));
+	bldRLeg.initialDamage = std::stof(ini.GetValue("BleedingLeg", "InitialDamage"));
 	bldRLeg.multiplier = std::stof(ini.GetValue("BleedingLeg", "Multiplier"));
 	bldRLeg.duration = std::stof(ini.GetValue("BleedingLeg", "Duration"));
 	for (auto it = bldRLeg.spell->listOfEffects.begin(); it != bldRLeg.spell->listOfEffects.end(); ++it) {
-		(*it)->data.magnitude = bldRLeg.initial;
+		(*it)->data.magnitude = bldRLeg.initialDamage;
 		(*it)->data.duration = (int32_t)floor(bldRLeg.duration);
 	}
 	bleedingConfigs.insert(std::pair<EFDBodyParts, BleedingData>(EFDBodyParts::RLeg, bldRLeg));
@@ -849,7 +868,14 @@ public:
 			}
 		}
 		float calculatedDamage = this->damage + additionalDamage;
-		if (calculatedDamage > 0 && this->impacts.size() > 0 && !ipct.processed && ipct.collidee.get() && ipct.collidee.get().get()->formType == ENUM_FORM_ID::kACHR && ipct.colObj) {
+		if (calculatedDamage > 0 && 
+			this->impacts.size() > 0 && 
+			!ipct.processed 
+			&& ipct.collidee.get() 
+			&& ipct.collidee.get().get()->formType == ENUM_FORM_ID::kACHR 
+			&& ipct.colObj
+			&& ipct.collidee.get()->parentCell
+			&& !ipct.collidee.get()->IsDead(true)) {
 			Actor* a = static_cast<Actor*>(ipct.collidee.get().get());
 			NiAVObject* parent = ipct.colObj.get()->sceneObject;
 			if (parent) {
@@ -910,27 +936,35 @@ public:
 						ActiveEffectList* aeList = a->GetActiveEffectList();
 						if (aeList) {
 							BleedingData& bld = bleedingConfigs.at((EFDBodyParts)partFound);
-							_MESSAGE("Bleeding condition %f current %f", bld.condition, a->GetActorValue(**EFDConditions[partFound]));
-							if (bld.condition >= a->GetActorValue(**EFDConditions[partFound])) {
-								ActiveEffect* bleedae = nullptr;
-								for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
-									ActiveEffect* ae = it->get();
-									if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive) && ae->item == bld.spell) {
-										bleedae = ae;
-										_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
+							_MESSAGE("Bleeding condition start %f current %f", bld.conditionStart, a->GetActorValue(**EFDConditions[partFound]));
+							if (bld.conditionStart >= a->GetActorValue(**EFDConditions[partFound])) {
+								float bleedChance = bld.chanceMin
+									+ (bld.chanceMax - bld.chanceMin) * (bld.conditionStart - max(bld.conditionThreshold, a->GetActorValue(**EFDConditions[partFound]))) / (bld.conditionStart - bld.conditionThreshold);
+								std::mt19937 e{ rd() };
+								std::uniform_real_distribution<float> dist{ 0, 100 };
+								float result = dist(e);
+								_MESSAGE("Bleeding Chance %f result %f", bleedChance, result);
+								if (result && result <= bleedChance) {
+									ActiveEffect* bleedae = nullptr;
+									for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
+										ActiveEffect* ae = it->get();
+										if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive) && ae->item == bld.spell) {
+											bleedae = ae;
+											_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
+										}
 									}
-								}
-								float bleedmag = this->damage * bld.multiplier;
-								if (bleedae) {
-									bleedae->magnitude -= bleedmag;
-									bleedae->elapsed = 0;
-									_MESSAGE("Current bleeding magnitude %f", bleedae->magnitude * -1.0f);
-								}
-								else {
-									bld.spell->listOfEffects[0]->data.magnitude = bld.initial + bleedmag;
-									bld.spell->listOfEffects[1]->data.magnitude = bld.initial + bleedmag;
-									bld.spell->Cast(a, a);
-									_MESSAGE("Bleeding start magnitude %f", bld.initial + bleedmag);
+									float bleedmag = this->damage * bld.multiplier;
+									if (bleedae) {
+										bleedae->magnitude -= bleedmag;
+										bleedae->elapsed = 0;
+										_MESSAGE("Current bleeding magnitude %f", bleedae->magnitude * -1.0f);
+									}
+									else {
+										bld.spell->listOfEffects[0]->data.magnitude = bld.initialDamage + bleedmag;
+										bld.spell->listOfEffects[1]->data.magnitude = bld.initialDamage + bleedmag;
+										bld.spell->Cast(a, a);
+										_MESSAGE("Bleeding start magnitude %f", bld.initialDamage + bleedmag);
+									}
 								}
 							}
 						}
