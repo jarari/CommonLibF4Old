@@ -126,6 +126,7 @@ SpellItem* headHitMark;
 SpellItem* torsoHitMark;
 SpellItem* EFDDeathMarkGlobal;
 SpellItem* killDeathMarked;
+SpellItem* avoidedDeath;
 std::vector<BGSBodyPartData::PartType> torsoParts = { BGSBodyPartData::PartType::COM, BGSBodyPartData::PartType::Torso, BGSBodyPartData::PartType::Pelvis };
 std::vector<BGSBodyPartData::PartType> headParts = { BGSBodyPartData::PartType::Eye, BGSBodyPartData::PartType::Head1, BGSBodyPartData::PartType::Head2, BGSBodyPartData::PartType::Brain };
 std::vector<BGSBodyPartData::PartType> larmParts = { BGSBodyPartData::PartType::LeftArm1 };
@@ -766,6 +767,9 @@ public:
 											else
 												_MESSAGE("%s(%llx) should be killed by deathmark", a->GetNPC()->fullName.c_str());
 										}
+										else if (a == PlayerCharacter::GetSingleton()) {
+											avoidedDeath->Cast(a, a);
+										}
 									}
 								}
 							}
@@ -1015,9 +1019,11 @@ void SetupProjectile() {
 	torsoHitMark = GetSpellByFullName(std::string("EFD Torso HitMark"));
 	torsoHitMarkMGEF = torsoHitMark->listOfEffects[0]->effectSetting;
 	killDeathMarked = GetSpellByFullName(std::string("EFD Kill DeathMarked"));
+	avoidedDeath = GetSpellByFullName(std::string("EFD Avoided Death"));
 	_MESSAGE("EFD Head HitMark %llx", headHitMark);
 	_MESSAGE("EFD Torso HitMark %llx", torsoHitMark);
 	_MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked);
+	_MESSAGE("EFD Avoided Death %llx", avoidedDeath);
 }
 
 #pragma endregion
