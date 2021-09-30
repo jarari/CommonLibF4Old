@@ -127,6 +127,7 @@ SpellItem* torsoHitMark;
 SpellItem* EFDDeathMarkGlobal;
 SpellItem* killDeathMarked;
 SpellItem* avoidedDeath;
+//몸통, 머리 등등 부위별 파츠타입
 std::vector<BGSBodyPartData::PartType> torsoParts = { BGSBodyPartData::PartType::COM, BGSBodyPartData::PartType::Torso, BGSBodyPartData::PartType::Pelvis };
 std::vector<BGSBodyPartData::PartType> headParts = { BGSBodyPartData::PartType::Eye, BGSBodyPartData::PartType::Head1, BGSBodyPartData::PartType::Head2, BGSBodyPartData::PartType::Brain };
 std::vector<BGSBodyPartData::PartType> larmParts = { BGSBodyPartData::PartType::LeftArm1 };
@@ -144,6 +145,7 @@ enum EFDBodyParts {
 	RLeg
 };
 
+//enum 스트링버전
 std::string EFDBodyPartsName[] = {
 	"None",
 	"Head",
@@ -154,6 +156,7 @@ std::string EFDBodyPartsName[] = {
 	"RLeg"
 };
 
+//AVIF 포인터의 포인터를 저장해서 따로 값을 바꿔줄 필요 없이 접근 가능하게
 ActorValueInfo** EFDConditions[] = {
 	nullptr,
 	&perceptionCondition,
@@ -164,6 +167,7 @@ ActorValueInfo** EFDConditions[] = {
 	&rightMobilityCondition
 };
 
+//부위별 출혈 데이터 설정
 struct BleedingData {
 	SpellItem* spell;
 	float conditionStart;
@@ -184,9 +188,11 @@ struct BleedingData {
 	}
 };
 std::unordered_map<EFDBodyParts, BleedingData> bleedingConfigs;
-REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
+REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };	//엔진 내부 업타임
 
 BGSExplosion* globalExplosion;
+
+//즉사 공식, 방어력 데미지 설정
 struct GlobalData {
 	float armorDamageInitial;
 	float armorDamageMultiplier;
@@ -475,6 +481,17 @@ void SetupDeathMark() {
 			deathmarkMGEFs.push_back((*it)->effectSetting->formID);
 		}
 	}
+
+	headHitMark = GetSpellByFullName(std::string("EFD Head HitMark"));
+	headHitMarkMGEF = headHitMark->listOfEffects[0]->effectSetting;
+	torsoHitMark = GetSpellByFullName(std::string("EFD Torso HitMark"));
+	torsoHitMarkMGEF = torsoHitMark->listOfEffects[0]->effectSetting;
+	killDeathMarked = GetSpellByFullName(std::string("EFD Kill DeathMarked"));
+	avoidedDeath = GetSpellByFullName(std::string("EFD Avoided Death"));
+	_MESSAGE("EFD Head HitMark %llx", headHitMark);
+	_MESSAGE("EFD Torso HitMark %llx", torsoHitMark);
+	_MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked);
+	_MESSAGE("EFD Avoided Death %llx", avoidedDeath);
 }
 
 void SetupBleeding() {
@@ -655,6 +672,7 @@ void CalculateArmorTiers(Actor* a) {
 	if (!a->inventoryList) {
 		return;
 	}
+	//개조 정보도 불러오기 위해서 현재 인벤토리에 있는 아이템 중 장착된 방어구를 전부 훑고 지나가면서 인스턴스 데이터를 통해 방어력 수치를 가져옴
 	for (auto invitem = a->inventoryList->data.begin(); invitem != a->inventoryList->data.end(); ++invitem) {
 		if (invitem->object->formType == ENUM_FORM_ID::kARMO) {
 			TESObjectARMO* invarmor = static_cast<TESObjectARMO*>(invitem->object);
@@ -690,6 +708,11 @@ void CalculateArmorTiers(Actor* a) {
 	SetHelmetTier(a, helmetAR);
 }
 
+/*
+* 방어구 티어는 착용 장비가 변경되었을 때, 처음으로 액터가 로드되었을 때 실행됨
+* 아래 이벤트들이 담당
+*/
+
 class EquipWatcher : public BSTEventSink<TESEquipEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESEquipEvent& evn, BSTEventSource<TESEquipEvent>* a_source) {
@@ -718,11 +741,17 @@ public:
 	F4_HEAP_REDEFINE_NEW(ObjectLoadWatcher);
 };
 
+/*
+* 마법 효과 이벤트
+* 즉사 효과 발동시 확률 계산에 이용됨
+* 내구도가 닳은 후를 기준으로 계산하기 위해서 마법 효과를 이용했던 것 같은데 기억이 잘 안남
+*/
 std::random_device rd;
 class MGEFWatcher : public BSTEventSink<TESMagicEffectApplyEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESMagicEffectApplyEvent& evn, BSTEventSource<TESMagicEffectApplyEvent>* a_source) {
 		EffectSetting* mgef = static_cast<EffectSetting*>(TESForm::GetFormByID(evn.magicEffectFormID));
+		//성능을 위해서 활성화된 마법 효과 중 타입 정보가 일치하는 마법 효과에 대해서만 계산함
 		if (mgef->data.flags == 0x18008010 && mgef->data.castingType.underlying() == 1 && mgef->data.delivery.underlying() == 1) {
 			if (evn.target->formType == ENUM_FORM_ID::kACHR) {
 				Actor* a = ((Actor*)evn.target.get());
@@ -759,6 +788,7 @@ public:
 										if (result > chance) {
 											killDeathMarked->Cast(a, a);
 											if (a == PlayerCharacter::GetSingleton()) {
+												//강제킬에 에센셜 해제 기능 추가 필요
 												if (playerForceKill) {
 													a->KillImpl(a, 9999, true, false);
 												}
@@ -767,6 +797,7 @@ public:
 											else
 												_MESSAGE("%s(%llx) should be killed by deathmark", a->GetNPC()->fullName.c_str());
 										}
+										//즉사 회피시 메세지 표기
 										else if (a == PlayerCharacter::GetSingleton()) {
 											avoidedDeath->Cast(a, a);
 										}
@@ -784,6 +815,10 @@ public:
 	F4_HEAP_REDEFINE_NEW(MGEFWatcher);
 };
 
+/*
+* 플레이어 사망 이벤트
+* 플레이어가 사망한 경우 적용된 체력 관련 마법 효과, 최종 신체 내구도, 체력, 마지막으로 받은 데미지 등을 출력
+*/
 class PlayerDeathWatcher : public BSTEventSink<BGSActorDeathEvent> {
 	virtual BSEventNotifyControl ProcessEvent(const BGSActorDeathEvent& evn, BSTEventSource<BGSActorDeathEvent>* src) override {
 		_MESSAGE("---Player Death---");
@@ -854,6 +889,16 @@ public:
 
 #pragma region Projectile Hook
 
+/*
+* 투사체 후킹 함수
+* Projectile 클래스에 있는 virtual bool ProcessImpacts() 함수를 CheckPlayerHitBoneHardcoded()로 바꿔치기해서 먼저 실행시킨 뒤 원본 함수 실행
+* 폴4에서 투사체가 물체를 맞추면 HandleHits->AddImpacts->ProcessImpacts 순서로 함수가 실행됨 (내 기억에는)
+* 이때 AddImpacts 함수 도중에 impacts 데이터가 생성되기 때문에 ProcessImpacts에서는 피격 대상에 대한 데이터를 불러올 수 있음
+* 피격 부위를 AVIF에 기록
+* 물리데미지 탄은 난이도, 방어력 보정이 적용되지 않은 쌩 탄약 데미지를 이용해서 방어력 감소, 출혈 효과를 적용
+* 쌩 탄약 데미지를 이용해서 즉사 확률 계산 후 저장
+* 데스마크 실행
+*/
 using std::unordered_map;
 class HookProjectile : public Projectile {
 public:
@@ -861,6 +906,7 @@ public:
 
 	bool CheckPlayerHitBoneHardcoded() {
 		Projectile::ImpactData& ipct = this->impacts[0];
+		//전체 데미지를 알아내기 위해 무기의 인스턴스 데이터에서 속성 데미지들의 합을 가져옴
 		float additionalDamage = 0;
 		if (this->weaponSource.instanceData) {
 			BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* dtArray =
@@ -871,6 +917,7 @@ public:
 				}
 			}
 		}
+		//실제 데미지가 있는 탄이 로드된 셀에 존재하는 살아있는 액터를 맞췄을 때 실행
 		float calculatedDamage = this->damage + additionalDamage;
 		if (calculatedDamage > 0 && 
 			this->impacts.size() > 0 && 
@@ -894,6 +941,7 @@ public:
 					partType = ipct.damageLimb.underlying();
 				}
 				if (partType == -1) {
+					//손은 파트 타입이 지정되지 않아있어서 하드코딩
 					if (parent->name == std::string_view("LArm_Hand")) {
 						partType = 6;
 					}
@@ -905,6 +953,7 @@ public:
 					}
 				}
 
+				//로그에 탄약 타입 표기
 				TESAmmo* ammo = this->ammoSource;
 				if (ammo) {
 					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
@@ -918,6 +967,7 @@ public:
 								ammo->data.projectile->formID);
 				}
 
+				//AVIF에 마지막으로 맞은 부위 저장
 				int partFound = 0;
 				int i = 0;
 				std::vector<BGSBodyPartData::PartType> partsList[] = { headParts, torsoParts, larmParts, llegParts, rarmParts, rlegParts };
@@ -935,10 +985,13 @@ public:
 				}
 				else {
 					_MESSAGE("Node : %s is %s (partType %d)", parent->name.c_str(), EFDBodyPartsName[partFound].c_str(), partType);
+					//물리데미지 탄에 대해서만 출혈 적용
 					if (this->damage > 0 && !this->IsBeamProjectile()) {
 						_MESSAGE("Physical projectile with base damage %f", this->damage);
+						//출혈이 이미 진행중인 경우 데미지를 증가시켜야 하니 마법 효과 리스트를 가져옴
 						ActiveEffectList* aeList = a->GetActiveEffectList();
 						if (aeList) {
+							//파츠별 출혈 데이터를 기반으로 확률 계산
 							BleedingData& bld = bleedingConfigs.at((EFDBodyParts)partFound);
 							_MESSAGE("Bleeding condition start %f current %f", bld.conditionStart, a->GetActorValue(**EFDConditions[partFound]));
 							if (bld.conditionStart >= a->GetActorValue(**EFDConditions[partFound])) {
@@ -949,6 +1002,7 @@ public:
 								float result = dist(e);
 								_MESSAGE("Bleeding Chance %f result %f", bleedChance, result);
 								if (result && result <= bleedChance) {
+									//마법 효과 리스트에서 출혈 효과를 찾아보고 출혈 효과가 있으면 강도 증가 + 갱신, 없으면 새로운 출혈 효과 적용
 									ActiveEffect* bleedae = nullptr;
 									for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
 										ActiveEffect* ae = it->get();
@@ -975,6 +1029,7 @@ public:
 						else {
 							_MESSAGE("ActiveEffectList not found. Bleeding can't be processed");
 						}
+						//방어력 감소 효과 및 즉사 효과 발동
 						if (this->shooter.get()) {
 							EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
 							_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
@@ -982,6 +1037,7 @@ public:
 						}
 					}
 				}
+				//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
 				if (partFound <= 2) { //Only calculate this when needed.
 					CartridgeData& gcd = cartridgeData.at(std::string("Global"));
 					for (int j = 0; j < maxTier; ++j) {
@@ -1013,17 +1069,6 @@ void SetupProjectile() {
 	addr = BeamProjectile::VTABLE[0].address();
 	_MESSAGE("Patching BeamProjectile %llx", addr);
 	HookProjectile::HookProcessImpacts(addr, offset);
-
-	headHitMark = GetSpellByFullName(std::string("EFD Head HitMark"));
-	headHitMarkMGEF = headHitMark->listOfEffects[0]->effectSetting;
-	torsoHitMark = GetSpellByFullName(std::string("EFD Torso HitMark"));
-	torsoHitMarkMGEF = torsoHitMark->listOfEffects[0]->effectSetting;
-	killDeathMarked = GetSpellByFullName(std::string("EFD Kill DeathMarked"));
-	avoidedDeath = GetSpellByFullName(std::string("EFD Avoided Death"));
-	_MESSAGE("EFD Head HitMark %llx", headHitMark);
-	_MESSAGE("EFD Torso HitMark %llx", torsoHitMark);
-	_MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked);
-	_MESSAGE("EFD Avoided Death %llx", avoidedDeath);
 }
 
 #pragma endregion
@@ -1086,20 +1131,37 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 		//게임 데이터가 모두 로드된 시점 (메인화면이 나오기 직전)
 		if (msg->type == F4SE::MessagingInterface::kGameDataReady) {
 			_MESSAGE("PlayerCharacter %llx", PlayerCharacter::GetSingleton());
-			SetupWeapons();
-			SetupArmors();
-			SetupDeathMark();
-			SetupBleeding();
-			SetupProjectile();
+			SetupWeapons();		//무기 데미지 설정
+			SetupArmors();		//방어구 티어 설정 로드
+			SetupDeathMark();	//즉사에 관련된 설정 및 AVIF, 스펠 등 변수 초기화
+			SetupBleeding();	//출혈 설정 로드
+			SetupProjectile();	//투사체 virtual 함수 덮어쓰기
+
+			/*
+			* 장비 장착 이벤트 후킹
+			* - 장비 장착시 방어구 티어 판별
+			*/
 			EquipWatcher* ew = new EquipWatcher();
 			EquipEventSource::GetSingleton()->RegisterSink(ew);
 
+			/*
+			* 오브젝트 로드 이벤트 후킹
+			* - 첫 조우시 방어구 티어 판별
+			*/
 			ObjectLoadWatcher* olw = new ObjectLoadWatcher();
 			ObjectLoadedEventSource::GetSingleton()->RegisterSink(olw);
 
+			/*
+			* 매직 이벤트 적용 이벤트 후킹
+			* - 피격 부위에 따라 확률 즉사 적용
+			*/
 			MGEFWatcher* mw = new MGEFWatcher();
 			MGEFApplyEventSource::GetSingleton()->RegisterSink(mw);
 
+			/*
+			* 플레이어 사망 이벤트 후킹
+			* - 플레이어 사망시 마지막 생체 정보 로그 출력
+			*/
 			PlayerCharacter* p = PlayerCharacter::GetSingleton();
 			PlayerDeathWatcher* pdw = new PlayerDeathWatcher();
 			((BSTEventSource<BGSActorDeathEvent>*)p)->RegisterSink(pdw);
