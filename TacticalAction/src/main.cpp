@@ -50,6 +50,22 @@ Ty SafeWrite64(uintptr_t addr, Ty data) {
 	return olddata;
 }
 
+template<class Ty>
+Ty SafeWrite64Function(uintptr_t addr, Ty data) {
+	DWORD oldProtect;
+	void* _d[2];
+	memcpy(_d, &data, sizeof(data));
+	size_t len = sizeof(_d[0]);
+
+	VirtualProtect((void*)addr, len, PAGE_EXECUTE_READWRITE, &oldProtect);
+	Ty olddata;
+	memset(&olddata, 0, sizeof(Ty));
+	memcpy(&olddata, (void*)addr, len);
+	memcpy((void*)addr, &_d[0], len);
+	VirtualProtect((void*)addr, len, oldProtect, &oldProtect);
+	return olddata;
+}
+
 TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
 	if (!modname.length() || !formid)
 		return nullptr;
@@ -87,13 +103,19 @@ TESIdleForm* toounroll_Front;
 TESIdleForm* toounroll_Left;
 TESIdleForm* toounroll_Right;
 TESIdleForm* toounroll_Back;
+TESIdleForm* toounsliding;
+TESIdleForm* weapDraw;
 ActorValueInfo* actionPoint;
 std::vector<float> movementHeldSecs = { 0.0f, 0.0f, 0.0f, 0.0f };
 bool canRoll = true;
+bool canSlide = true;
+int rollState = 0;
+int slideState = 0;
 TESIdleForm* queueRoll;
+TESIdleForm* queueSlide;
 bool wasFP = false;
 bool wasSneaking = false;
-uint64_t timeCamReverted;
+uint64_t timeActionEnded;
 bool enableDodgeKey = true;
 uint32_t dodgeKey = 0xa0;
 float apCost = 25.0f;
@@ -102,6 +124,8 @@ bool enableDoubleTap = true;
 float keyTimeout = 0.1f;
 int numKeyPress = 2;
 int keyPressedCount = 0;
+bool enableSlideKey = true;
+uint32_t slidekey = 0xa0;
 std::chrono::system_clock::duration lastKeyTime;
 uint32_t lastKey;
 REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
@@ -116,7 +140,12 @@ public:
 			if (evn.argument == std::string("WPNmocamoca")) {
 				queueRoll = nullptr;
 				canRoll = false;
+				canSlide = false;
+				rollState = 1;
 				p->ModActorValue(ACTOR_VALUE_MODIFIER::Damage, *actionPoint, -apCost);
+				if (wasSneaking) {
+					p->SetSneaking(true);
+				}
 			}
 			if (queueRoll) {
 				p->SetSneaking(false);
@@ -126,31 +155,82 @@ public:
 				}
 			}
 		}
-		else {
-			if (evn.animEvent == std::string("AnimObjUnequip")) {
+		if (rollState) {
+			if (rollState == 1 && evn.animEvent == std::string("AnimObjUnequip")) {
+				rollState = 2;
 				if (wasFP) {
+					wasFP = false;
 					pcam->SetState(pcam->cameraStates[CameraState::kFirstPerson].get());
 					//_MESSAGE("Return FP");
 				}
-				wasFP = false;
 				if (!wasSneaking) {
 					canRoll = true;
+					canSlide = true;
+					rollState = 0;
 				}
-				timeCamReverted = *ptr_engineTime;
+				timeActionEnded = *ptr_engineTime;
 			}
-			else if (!wasFP && wasSneaking && *ptr_engineTime - timeCamReverted > 50000) {
+			else if (rollState == 2 && wasSneaking && *ptr_engineTime - timeActionEnded > 5000) {
 				if (p->stance == 0x1) {
 					wasSneaking = false;
 					canRoll = true;
+					canSlide = true;
+					rollState = 0;
 				}
 				else {
 					p->SetSneaking(true);
 				}
 			}
 		}
+
+		if (canSlide) {
+			if (evn.argument == std::string("WPNSlidingtoSneak")) {
+				queueSlide = nullptr;
+				canRoll = false;
+				canSlide = false;
+				slideState = 1;
+				p->ModActorValue(ACTOR_VALUE_MODIFIER::Damage, *actionPoint, -apCost);
+				p->SetSneaking(true);
+				p->SetWeaponState(WEAPON_STATE::kDrawn);
+			}
+			if (queueSlide) {
+				p->SetSneaking(false);
+				if (p->currentProcess) {
+					p->currentProcess->PlayIdle(p, 0x35, queueSlide);
+					//_MESSAGE("Processing queued roll evn %s", evn.animEvent.c_str());
+				}
+			}
+		} 
+
+		if (slideState) {
+			if (slideState == 1 && evn.animEvent == std::string("AnimObjUnequip")) {
+				slideState = 2;
+				pcam->SetState(pcam->cameraStates[CameraState::kFirstPerson].get());
+				timeActionEnded = *ptr_engineTime;
+			}
+			else if (slideState == 2) {
+				if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]){
+					p->SetWeaponState(WEAPON_STATE::kSheathed);
+					p->currentProcess->PlayIdle(p, 0x35, weapDraw);
+					slideState = 3;
+				}
+			}
+			else if (slideState == 3) {
+				if (p->stance == 0x1) {
+					canRoll = true;
+					canSlide = true;
+					slideState = 0;
+				} else {
+					p->SetSneaking(true);
+				}
+			}
+		}
+
 		FnProcessEvent fn = fnHash.at(*(uint64_t*)this);
 		return fn ? (this->*fn)(evn, src) : BSEventNotifyControl::kContinue;
 	}
+
+
 
 	void HookSink() {
 		uint64_t vtable = *(uint64_t*)this;
@@ -212,6 +292,33 @@ void DoRoll(int dir) {
 	}
 }
 
+//0x100 = Sprinting
+void DoSlide(int dir) {
+	if (p->moveMode & 0x100 && !queueSlide && canSlide && p->GetActorValue(*actionPoint) >= apCost) {
+		if (p->currentProcess) {
+			//_MESSAGE("Slide");
+			if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
+				queueSlide = toounsliding;
+				pcam->SetState(pcam->cameraStates[CameraState::k3rdPerson].get());
+				//_MESSAGE("Force 3rd person");
+			}
+			if (p->stance == 0x1) {	 //Sneaking
+				queueSlide = toounsliding;
+				p->SetSneaking(false);
+			}
+			if (p->weaponState != WEAPON_STATE::kDrawn) {
+				queueSlide = toounsliding;
+				p->currentProcess->PlayIdle(p, 0x35, weapDraw);
+			}
+			if (!queueSlide) {
+				p->currentProcess->PlayIdle(p, 0x35, toounsliding);
+			}
+		}
+	}
+}
+
+
+
 void StrafeTapRoll(uint32_t id, int dir) {
 	if (lastKey != id || !canRoll) {
 		lastKey = id;
@@ -233,11 +340,9 @@ void StrafeTapRoll(uint32_t id, int dir) {
 	lastKeyTime = system_clock::now().time_since_epoch();
 }
 
-class TacticalDodgeHandler : public PlayerInputHandler {
+class TacticalDodgeHandler : public BSInputEventReceiver {
 public:
-	explicit constexpr TacticalDodgeHandler(PlayerControlsData& a_data) noexcept :
-		PlayerInputHandler(a_data) {
-	};
+	typedef void (TacticalDodgeHandler::* FnPerformInputProcessing)(const InputEvent* a_queueHead);
 
 	void HandleMultipleButtonEvent(const ButtonEvent* evn) {
 		if (evn->eventType != INPUT_EVENT_TYPE::kButton) {
@@ -281,7 +386,8 @@ public:
 				movementHeldSecs[3] = 0.0f;
 			}
 		}
-		if (id == dodgeKey && evn->value == 0.0f && evn->heldDownSecs < heldDownDelay) {
+
+		if (enableDodgeKey && canRoll && id == dodgeKey && evn->value == 0.0f && evn->heldDownSecs < heldDownDelay) {
 			int dir = 0;
 			float minHeldSecs = movementHeldSecs[0] ? movementHeldSecs[0] : 999999.0f;
 			for (int i = 1; i < 4; ++i) {
@@ -293,70 +399,101 @@ public:
 			DoRoll(dir);
 		}
 
+		if (enableDoubleTap && canRoll) {
+			if (evn->value == 1.0f && evn->heldDownSecs == 0.0f) {
+				if (evn->strUserEvent == std::string_view("Forward")) {
+					StrafeTapRoll(id, 0);
+				}
+				else if (evn->strUserEvent == std::string_view("StrafeLeft")) {
+					StrafeTapRoll(id, 1);
+				}
+				else if (evn->strUserEvent == std::string_view("StrafeRight")) {
+					StrafeTapRoll(id, 2);
+				}
+				else if (evn->strUserEvent == std::string_view("Back")) {
+					StrafeTapRoll(id, 3);
+				}
+			}
+		}
+
+		if (enableSlideKey && canSlide && id == slidekey && evn->value == 1.0f) {
+			int dir = 0;
+			float minHeldSecs = movementHeldSecs[0] ? movementHeldSecs[0] : 999999.0f;
+			for (int i = 1; i < 4; ++i) {
+				if (movementHeldSecs[i] && movementHeldSecs[i] < minHeldSecs) {
+					dir = i;
+					minHeldSecs = movementHeldSecs[i];
+				}
+			}
+			DoSlide(dir);
+		}
+
 		if (evn->next)
 			HandleMultipleButtonEvent((ButtonEvent*)evn->next);
 	}
 
-	void HandleTapButtonEvent(const ButtonEvent* evn) {
-		uint32_t id = evn->idCode;
-		if (evn->device == INPUT_DEVICE::kMouse)
-			id += 256;
-
-		if (evn->value == 1.0f && evn->heldDownSecs == 0.0f) {
-			if (evn->strUserEvent == std::string_view("Forward")) {
-				StrafeTapRoll(id, 0);
-			}
-			else if (evn->strUserEvent == std::string_view("StrafeLeft")) {
-				StrafeTapRoll(id, 1);
-			}
-			else if (evn->strUserEvent == std::string_view("StrafeRight")) {
-				StrafeTapRoll(id, 2);
-			}
-			else if (evn->strUserEvent == std::string_view("Back")) {
-				StrafeTapRoll(id, 3);
-			}
+	void HookedPerformInputProcessing(const InputEvent* a_queueHead) {
+		if (!UI::GetSingleton()->menuMode && a_queueHead) {
+			if (enableDodgeKey || enableSlideKey)
+				HandleMultipleButtonEvent((ButtonEvent*)a_queueHead);
+		}
+		FnPerformInputProcessing fn = fnHash.at(*(uint64_t*)this);
+		if (fn) {
+			(this->*fn)(a_queueHead);
 		}
 	}
 
-	virtual void OnButtonEvent(const ButtonEvent* evn) override {
-		if (UI::GetSingleton()->menuMode)
-			return;
-		if(enableDodgeKey)
-			HandleMultipleButtonEvent(evn);
-		if (enableDoubleTap)
-			HandleTapButtonEvent(evn);
+	void HookSink() {
+		uint64_t vtable = *(uint64_t*)this;
+		auto it = fnHash.find(vtable);
+		if (it == fnHash.end()) {
+			FnPerformInputProcessing fn = SafeWrite64Function(vtable, &TacticalDodgeHandler::HookedPerformInputProcessing);
+			fnHash.insert(std::pair<uint64_t, FnPerformInputProcessing>(vtable, fn));
+		}
 	}
-	F4_HEAP_REDEFINE_NEW(TacticalDodgeHandler);
+
+	void UnHookSink() {
+		uint64_t vtable = *(uint64_t*)this;
+		auto it = fnHash.find(vtable);
+		if (it == fnHash.end())
+			return;
+		SafeWrite64Function(vtable, it->second);
+		fnHash.erase(it);
+	}
+
+protected:
+	static unordered_map<uint64_t, FnPerformInputProcessing> fnHash;
 };
+unordered_map<uint64_t, TacticalDodgeHandler::FnPerformInputProcessing> TacticalDodgeHandler::fnHash;
 
 void InitializePlugin() {
 	p = PlayerCharacter::GetSingleton();
 	((AnimationGraphEventWatcher*)((uint64_t)p + 0x38))->HookSink();
-	pc = PlayerControls::GetSingleton();
-	TacticalDodgeHandler* tdh = new TacticalDodgeHandler(pc->data);
-	pc->RegisterHandler((PlayerInputHandler*)tdh);
 	pcam = PlayerCamera::GetSingleton();
+	((TacticalDodgeHandler*)((uint64_t)pcam + 0x38))->HookSink();
 	_MESSAGE("PlayerCharacter %llx", p);
 	_MESSAGE("UI %llx", UI::GetSingleton());
 	_MESSAGE("PlayerCamera %llx", pcam);
-	_MESSAGE("PlayerConrols %llx", pc);
-	_MESSAGE("TacticalDodgeHandler %llx", tdh);
 	toounroll_Front = (TESIdleForm*)GetFormFromMod(std::string("tooun_Animationpack.esl"), 0x82D);
 	toounroll_Left = (TESIdleForm*)GetFormFromMod(std::string("tooun_Animationpack.esl"), 0x82B);
 	toounroll_Right = (TESIdleForm*)GetFormFromMod(std::string("tooun_Animationpack.esl"), 0x82A);
 	toounroll_Back = (TESIdleForm*)GetFormFromMod(std::string("tooun_Animationpack.esl"), 0x82C);
+	toounsliding = (TESIdleForm*)GetFormFromMod(std::string("tooun_Animationpack.esl"), 0x800);
+	weapDraw = (TESIdleForm*)TESForm::GetFormByID(0x17ADC);
 	actionPoint = (ActorValueInfo*)TESForm::GetFormByID(0x2D5);
 }
 
 void LoadConfigs() {
 	ini.LoadFile("Data\\F4SE\\Plugins\\TacticalAction.ini");
-	enableDodgeKey = std::stoi(ini.GetValue("General", "EnableDodge", "1")) > 0;
+	enableDodgeKey = std::stoi(ini.GetValue("General", "EnableDodgeKey", "1")) > 0;
 	dodgeKey = std::stoi(ini.GetValue("General", "DodgeKey", "0xa0"), 0, 16);
 	apCost = std::stof(ini.GetValue("General", "APCost", "25.0"));
 	heldDownDelay = std::stof(ini.GetValue("General", "HeldDownDelay", "0.2"));
 	enableDoubleTap = std::stoi(ini.GetValue("General", "EnableDoubleTap", "1")) > 0;
 	keyTimeout = std::stof(ini.GetValue("General", "KeyTimeout", "0.2"));
 	numKeyPress = std::stoi(ini.GetValue("General", "NumKeyPress", "2"));
+	enableSlideKey = std::stoi(ini.GetValue("General", "EnableSlideKey", "1")) > 0;
+	slidekey = std::stoi(ini.GetValue("General", "Slidekey", "0xa2"), 0, 16);
 }
 
 void ResetWASD() {
@@ -367,9 +504,13 @@ void ResetWASD() {
 	keyPressedCount = 0;
 	lastKeyTime = system_clock::now().time_since_epoch();
 	queueRoll = nullptr;
+	queueSlide = nullptr;
 	wasFP = false;
 	wasSneaking = false;
 	canRoll = true;
+	canSlide = true;
+	rollState = 0;
+	slideState = 0;
 }
 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
@@ -427,6 +568,10 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 			LoadConfigs();
 		}
 		else if (msg->type == F4SE::MessagingInterface::kPostLoadGame) {
+			LoadConfigs();
+			ResetWASD();
+		}
+		else if (msg->type == F4SE::MessagingInterface::kNewGame) {
 			LoadConfigs();
 			ResetWASD();
 		}
