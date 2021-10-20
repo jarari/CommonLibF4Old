@@ -1,6 +1,7 @@
 {
   "name": "umbrella",
   "version-string": "1",
+  "builtin-baseline": "6a274ad4b370b3b729d3af6227f57257ec708b43",
   "dependencies": [
     "args",
     "boost-algorithm",
@@ -16,5 +17,15 @@
     "robin-hood-hashing",
     "spdlog",
     "xbyak"
+  ],
+  "overrides": [
+    { "name": "boost-algorithm", "version": "1.75.0" },
+    { "name": "boost-iostreams","version": "1.75.0" },
+    { "name": "boost-iterator","version": "1.75.0" },
+    { "name": "boost-nowide","version": "1.75.0" },
+    { "name": "boost-predef","version": "1.75.0" },
+    { "name": "boost-regex","version": "1.75.0" },
+    { "name": "boost-stl-interfaces","version": "1.75.0" },
+    { "name": "boost-test","version": "1.75.0" }
   ]
 }
