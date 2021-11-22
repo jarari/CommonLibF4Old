@@ -298,22 +298,25 @@ public:
 	}
 
 	static void SetAmmoCount(int ammostate) {
-		if (!IsHoldingGun())
-			return;
-
 		UI* ui = UI::GetSingleton();
 		Scaleform::Ptr<IMenu> hud = ui->GetMenu(BSFixedString("HUDMenu"));
 		Scaleform::Ptr<IMenu> ammoUI = ui->GetMenu(ammoUIName);
 		if (hud.get() && ammoUI.get() && ui->GetMenuOpen(BSFixedString("HUDMenu")) && ui->GetMenuOpen(ammoUIName)) {
+			int temp;
 			Scaleform::GFx::Value ammoCount1;
 			hud->uiMovie->GetVariable(&ammoCount1, "root1.RightMeters_mc.AmmoCount_mc.ClipCount_tf.text");
-			int ac1Int;
 			std::string_view ac1 = ammoCount1.GetString();
-			std::from_chars(ac1.data(), ac1.data() + ac1.size(), ac1Int);
-			ac1 = std::to_string(ac1Int);
+			std::from_chars_result res1 = std::from_chars(ac1.data(), ac1.data() + ac1.size(), temp);
+			if (res1.ec != std::errc())
+				return;
+			ac1 = std::to_string(temp);
 			Scaleform::GFx::Value ammoCount2;
 			hud->uiMovie->GetVariable(&ammoCount2, "root1.RightMeters_mc.AmmoCount_mc.ReserveCount_tf.text");
 			std::string_view ac2 = ammoCount2.GetString();
+			std::from_chars_result res2 = std::from_chars(ac2.data(), ac2.data() + ac2.size(), temp);
+			if (res2.ec != std::errc())
+				return;
+			ac2 = std::to_string(temp);
 			Scaleform::GFx::Value explosiveCount;
 			hud->uiMovie->GetVariable(&explosiveCount, "root1.RightMeters_mc.ExplosiveAmmoCount_mc.AvailableCount_tf.text");
 			std::string_view ec = explosiveCount.GetString();
