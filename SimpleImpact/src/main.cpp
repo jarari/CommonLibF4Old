@@ -202,7 +202,7 @@ public:
 class HitEventSink : public BSTEventSink<_TESHitEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const _TESHitEvent& a_event, BSTEventSource<_TESHitEvent>* a_source) override {
-		if ((a_event.attackData || a_event.weapon)) {
+		if (enableHitSound && (a_event.attackData || a_event.weapon)) {
 			if (!playOnGunOnly || (a_event.weaponInstance && a_event.weaponInstance->type == 9)) {
 				if (a_event.attacker == PlayerCharacter::GetSingleton() && a_event.victim && a_event.victim->formType == ENUM_FORM_ID::kACHR) {
 					if (*ptr_engineTime - lastHitSound > 10) {
@@ -245,7 +245,7 @@ public:
 	typedef BSEventNotifyControl (AnimationGraphEventWatcher::* FnProcessEvent)(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* dispatcher);
 
 	BSEventNotifyControl HookedProcessEvent(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* src) {
-		if (evn.animEvent == std::string("weaponFire") && evn.argument != std::string("2")) {
+		if (evn.animEvent == std::string("weaponFire") && evn.argument != std::string("2") && (p->gunState == 0x8 || p->gunState == 0x7)) {
 			if (p->currentProcess) {
 				BSTArray<EquippedItem>& equipped = p->currentProcess->middleHigh->equippedItems;
 				if (equipped.size() > 0 && equipped[0].item.instanceData &&
@@ -322,7 +322,11 @@ void CalculateScore(Actor* a) {
 			((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type == 9) {
 			TESObjectWEAP* wep = ((TESObjectWEAP*)equipped[0].item.object);
 			TESObjectWEAP::InstanceData* instance = (TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get();
-			_MESSAGE("Name : %s Form ID : %llx Ammo : %llx", wep->fullName.c_str(), wep->formID, instance->ammo->formID);
+			uint32_t ammoID = 0;
+			if (instance->ammo) {
+				ammoID = instance->ammo->formID;
+			}
+			_MESSAGE("Name : %s Form ID : %llx Ammo : %llx", wep->GetFullName(), wep->formID, ammoID);
 			float damage = instance->attackDamage;
 			if (instance->ammo)
 				damage += instance->ammo->data.damage;
@@ -331,7 +335,7 @@ void CalculateScore(Actor* a) {
 					damage += it->second.i;
 				}
 			}
-			bool isAutomatic = instance->flags & 0x8000;
+			bool isAutomatic = (instance->flags & 0x8000) == 0x8000;
 			float rof = instance->attackDelaySec / instance->speed;
 			if (isAutomatic)
 				rof /= 2.0f;
@@ -428,6 +432,8 @@ void LoadConfigs() {
 	_MESSAGE("Loading configs");
 	ini.LoadFile("Data\\F4SE\\Plugins\\SimpleImpact.ini");
 	enableHitSound = std::stoi(ini.GetValue("HitSound", "Enabled", "1")) > 0;
+	if (enableHitSound)
+		_MESSAGE("HitSound Enabled");
 	soundType = min(max(std::stoi(ini.GetValue("HitSound", "SoundType", "1")), 1), 7);
 	freqShift = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyShift", "0"));
 	freqVariance = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyVariance", "0"));
@@ -452,6 +458,8 @@ void LoadConfigs() {
 	playOnGunOnly = std::stoi(ini.GetValue("HitSound", "GunOnly", "1")) > 0;
 
 	enableShake = std::stoi(ini.GetValue("Shake", "Enabled", "1")) > 0;
+	if (enableShake)
+		_MESSAGE("Shake Enabled");
 	durationMultiplier = std::stof(ini.GetValue("Shake", "DurationMultiplier", "1.0"));
 	strengthMultiplier = std::stof(ini.GetValue("Shake", "StrengthMultiplier", "1.0"));
 	PADurationMultiplier = std::stof(ini.GetValue("Shake", "PowerArmorDurationMultiplier", "0.7"));
@@ -470,6 +478,8 @@ void LoadConfigs() {
 	damageCoefficient = std::stof(ini.GetValue("Shake", "DamageCoefficient", "10.0"));
 
 	enableFX = std::stoi(ini.GetValue("FX", "Enabled", "1")) > 0;
+	if (enableFX)
+		_MESSAGE("FX Enabled");
 	minimumFXStrength = std::stof(ini.GetValue("FX", "MinimumStrength", "0.5"));
 	maximumFXStrength = std::stof(ini.GetValue("FX", "MaximumStrength", "0.8"));
 
@@ -486,7 +496,11 @@ void LoadConfigs() {
 		}
 		aimRecoveryDisabled = true;
 	}
+	ini.Reset();
 
+	customShakeDuration.clear();
+	customShakeStrength.clear();
+	customFXStrength.clear();
 	ifstream reader;
 	reader.open("Data\\F4SE\\Plugins\\SimpleImpactCustom.json");
 	nlohmann::json customData;
@@ -498,15 +512,12 @@ void LoadConfigs() {
 				for (auto valit = formit.value().begin(); valit != formit.value().end(); ++valit) {
 					if (valit.key() == "ShakeDuration") {
 						customShakeDuration.insert(std::pair<TESForm*, float>(form, valit.value().get<float>()));
-						_MESSAGE("ShakeDuration : %f", customShakeDuration.at(form));
 					}
 					else if (valit.key() == "ShakeStrength") {
 						customShakeStrength.insert(std::pair<TESForm*, float>(form, valit.value().get<float>()));
-						_MESSAGE("ShakeStrength : %f", customShakeStrength.at(form));
 					}
 					else if (valit.key() == "FXStrength") {
 						customFXStrength.insert(std::pair<TESForm*, float>(form, valit.value().get<float>()));
-						_MESSAGE("FXStrength : %f", customFXStrength.at(form));
 					}
 				}
 			}
