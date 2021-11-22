@@ -74,6 +74,7 @@ conditionally_add_subdirectory(TacticalAction)
 conditionally_add_subdirectory(PUBGAiming)
 conditionally_add_subdirectory(AmmoUIHelper)
 conditionally_add_subdirectory(SimpleImpact)
+conditionally_add_subdirectory(NanakoHeadRelocator)
 
 
 include(FetchContent)
