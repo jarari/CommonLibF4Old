@@ -5,6 +5,8 @@ using namespace RE;
 using std::ifstream;
 using std::unordered_map;
 using std::pair;
+using std::vector;
+using std::string;
 
 char tempbuf[8192] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
@@ -88,20 +90,25 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 }
 
 struct TranslationData {
-	BSFixedString bone;
+	string bonename;
 	NiPoint3 translation;
 	float scale;
-	TranslationData(BSFixedString _b, NiPoint3 _t, float _s) {
-		bone = _b;
+	TranslationData(string _b, NiPoint3 _t, float _s) {
+		bonename = _b;
 		translation = _t;
 		scale = _s;
 	}
 };
 
+class CharacterMoveFinishEventWatcher;
+
 REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
 PlayerCharacter* p;
-unordered_map<TESForm*, TranslationData> customRaceTranslations;
-unordered_map<TESForm*, TranslationData> customNPCTranslations;
+unordered_map<TESForm*, vector<TranslationData>> customRaceFemaleTranslations;
+unordered_map<TESForm*, vector<TranslationData>> customRaceMaleTranslations;
+unordered_map<TESForm*, vector<TranslationData>> customNPCTranslations;
+CharacterMoveFinishEventWatcher* PCWatcher;
+CharacterMoveFinishEventWatcher* ActorWatcher;
 
 
 class CharacterMoveFinishEventWatcher {
@@ -112,27 +119,46 @@ public:
 		Actor* a = (Actor*)((uintptr_t)this - 0x150);
 		if (a->Get3D()) {
 			int found = 0;
-			auto raceit = customRaceTranslations.find(a->race);
-			if (raceit != customRaceTranslations.end()) {
-				found = 1;
+			TESNPC* npc = a->GetNPC();
+			unordered_map<TESForm*, vector<TranslationData>>::iterator raceit;
+			if (npc->GetSex() == 0) {
+				raceit = customRaceMaleTranslations.find(a->race);
+				if (raceit != customRaceMaleTranslations.end()) {
+					found = 1;
+				}
 			}
-			auto npcit = customNPCTranslations.find(a->GetNPC());
+			else {
+				raceit = customRaceFemaleTranslations.find(a->race);
+				if (raceit != customRaceFemaleTranslations.end()) {
+					found = 1;
+				}
+			}
+			auto npcit = customNPCTranslations.find(npc);
 			if (npcit != customNPCTranslations.end()) {
 				found = 2;
 			}
 			if (found > 0) {
 				NiAVObject* node = a->Get3D();
-				NiAVObject* head;
+				NiAVObject* bone;
 				if (found == 2) {
-					head = node->GetObjectByName(npcit->second.bone);
-					if (head) {
-						head->local.translate = npcit->second.translation;
+					for (auto it = npcit->second.begin(); it != npcit->second.end(); ++it) {
+						bone = node->GetObjectByName(it->bonename);
+						if (bone) {
+							bone->local.translate = it->translation;
+							bone->local.scale = it->scale;
+						}
 					}
 				}
 				else if (found == 1) {
-					head = node->GetObjectByName(raceit->second.bone);
-					if (head) {
-						head->local.translate = raceit->second.translation;
+					//_MESSAGE("Actor %llx Race %llx", a, a->race);
+					for (auto it = raceit->second.begin(); it != raceit->second.end(); ++it) {
+						bone = node->GetObjectByName(it->bonename);
+						//_MESSAGE("Bone %s", it->bonename.c_str());
+						if (bone) {
+							bone->local.translate = it->translation;
+							bone->local.scale = it->scale;
+							//_MESSAGE("X %f Y %f Z %f Scale %f", bone->local.translate.x, bone->local.translate.y, bone->local.translate.z, bone->local.scale);
+						}
 					}
 				}
 			}
@@ -148,24 +174,56 @@ public:
 			fnHash.insert(std::pair<uint64_t, FnProcessEvent>(vtable, fn));
 		}
 	}
+
+	void UnHookSink(uint64_t vtable) {
+		auto it = fnHash.find(vtable);
+		if (it == fnHash.end())
+			return;
+		SafeWrite64Function(vtable + 0x8, it->second);
+		fnHash.erase(it);
+	}
+
 	F4_HEAP_REDEFINE_NEW(CharacterMoveFinishEventWatcher);
 protected:
 	static std::unordered_map<uint64_t, FnProcessEvent> fnHash;
 };
 std::unordered_map<uint64_t, CharacterMoveFinishEventWatcher::FnProcessEvent> CharacterMoveFinishEventWatcher::fnHash;
 
+class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const MenuOpenCloseEvent& evn, BSTEventSource<MenuOpenCloseEvent>* src) override {
+		if (evn.menuName == BSFixedString("LoadingMenu")) {
+			uint64_t PCVtable = REL::Relocation<uint64_t>{ PlayerCharacter::VTABLE[13] }.address();
+			uint64_t ActorVtable = REL::Relocation<uint64_t>{ Actor::VTABLE[13] }.address();
+			if (!PCWatcher)
+				PCWatcher = new CharacterMoveFinishEventWatcher();
+			if (!ActorWatcher)
+				ActorWatcher = new CharacterMoveFinishEventWatcher();
+			if (evn.opening) {
+				PCWatcher->UnHookSink(PCVtable);
+				ActorWatcher->UnHookSink(ActorVtable);
+				_MESSAGE("Unhook from event");
+			}
+			else {
+				PCWatcher->HookSink(PCVtable);
+				ActorWatcher->HookSink(ActorVtable);
+				_MESSAGE("Hook to event");
+			}
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+public:
+	F4_HEAP_REDEFINE_NEW(MenuWatcher);
+};
+
 void InitializePlugin() {
 	p = PlayerCharacter::GetSingleton();
-	uint64_t PCVtable = REL::Relocation<uint64_t>{ PlayerCharacter::VTABLE[13] }.address();
-	CharacterMoveFinishEventWatcher* PCWatcher = new CharacterMoveFinishEventWatcher();
-	PCWatcher->HookSink(PCVtable);
-	uint64_t ActorVtable = REL::Relocation<uint64_t>{ Actor::VTABLE[13] }.address();
-	CharacterMoveFinishEventWatcher* ActorWatcher = new CharacterMoveFinishEventWatcher();
-	ActorWatcher->HookSink(ActorVtable);
+	MenuWatcher* mw = new MenuWatcher();
+	UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mw);
 }
 
 void LoadConfigs() {
-	customRaceTranslations.clear();
+	customRaceFemaleTranslations.clear();
+	customRaceMaleTranslations.clear();
 	customNPCTranslations.clear();
 	ifstream reader;
 	reader.open("Data\\F4SE\\Plugins\\NanakoHeadRelocator.json");
@@ -175,30 +233,104 @@ void LoadConfigs() {
 		for (auto formit = pluginit.value().begin(); formit != pluginit.value().end(); ++formit) {
 			TESForm* form = GetFormFromMod(pluginit.key(), std::stoi(formit.key(), 0, 16));
 			if (form) {
-				for (auto boneit = formit.value().begin(); boneit != formit.value().end(); ++boneit) {
-					float x = 0;
-					float y = 0;
-					float z = 0;
-					float scale = 1;
-					for (auto valit = boneit.value().begin(); valit != boneit.value().end(); ++valit) {
-						if (valit.key() == "X") {
-							x = valit.value().get<float>();
+				if (form->GetFormType() == ENUM_FORM_ID::kNPC_) {
+					for (auto boneit = formit.value().begin(); boneit != formit.value().end(); ++boneit) {
+						float x = 0;
+						float y = 0;
+						float z = 0;
+						float scale = 1;
+						for (auto valit = boneit.value().begin(); valit != boneit.value().end(); ++valit) {
+							if (valit.key() == "X") {
+								x = valit.value().get<float>();
+							}
+							else if (valit.key() == "Y") {
+								y = valit.value().get<float>();
+							}
+							else if (valit.key() == "Z") {
+								z = valit.value().get<float>();
+							}
+							else if (valit.key() == "Scale") {
+								scale = valit.value().get<float>();
+							}
 						}
-						else if (valit.key() == "Y") {
-							y = valit.value().get<float>();
+						auto existit = customNPCTranslations.find(form);
+						if (existit == customNPCTranslations.end()) {
+							customNPCTranslations.insert(pair<TESForm*, vector<TranslationData>>(form, vector<TranslationData> {
+								TranslationData(boneit.key(), NiPoint3(x, y, z), scale)
+							}));
 						}
-						else if (valit.key() == "Z") {
-							z = valit.value().get<float>();
+						else {
+							existit->second.push_back(TranslationData(boneit.key(), NiPoint3(x, y, z), scale));
 						}
-						else if (valit.key() == "Scale") {
-							scale = valit.value().get<float>();
-						}
+						_MESSAGE("NPC %s Bone %s X %f Y %f Z %f Scale %f", ((TESNPC*)form)->GetFullName(), boneit.key().c_str(), x, y, z, scale);
 					}
-					if (form->GetFormType() == ENUM_FORM_ID::kRACE) {
-						customRaceTranslations.insert(pair<TESForm*, TranslationData>(form, TranslationData(BSFixedString(boneit.key()), NiPoint3(x, y, z), scale)));
-					}
-					else if (form->GetFormType() == ENUM_FORM_ID::kNPC_) {
-						customNPCTranslations.insert(pair<TESForm*, TranslationData>(form, TranslationData(BSFixedString(boneit.key()), NiPoint3(x, y, z), scale)));
+				}
+				else if (form->GetFormType() == ENUM_FORM_ID::kRACE) {
+					for (auto sexit = formit.value().begin(); sexit != formit.value().end(); ++sexit) {
+						if (sexit.key() == "Female") {
+							for (auto boneit = sexit.value().begin(); boneit != sexit.value().end(); ++boneit) {
+								float x = 0;
+								float y = 0;
+								float z = 0;
+								float scale = 1;
+								for (auto valit = boneit.value().begin(); valit != boneit.value().end(); ++valit) {
+									if (valit.key() == "X") {
+										x = valit.value().get<float>();
+									}
+									else if (valit.key() == "Y") {
+										y = valit.value().get<float>();
+									}
+									else if (valit.key() == "Z") {
+										z = valit.value().get<float>();
+									}
+									else if (valit.key() == "Scale") {
+										scale = valit.value().get<float>();
+									}
+								}
+								auto existit = customRaceFemaleTranslations.find(form);
+								if (existit == customRaceFemaleTranslations.end()) {
+									customRaceFemaleTranslations.insert(pair<TESForm*, vector<TranslationData>>(form, vector<TranslationData> {
+										TranslationData(boneit.key(), NiPoint3(x, y, z), scale)
+									}));
+								}
+								else {
+									existit->second.push_back(TranslationData(boneit.key(), NiPoint3(x, y, z), scale));
+								}
+								_MESSAGE("Race %s Female Bone %s X %f Y %f Z %f Scale %f", form->GetFormEditorID(), boneit.key().c_str(), x, y, z, scale);
+							}
+						}
+						else if (sexit.key() == "Male") {
+							for (auto boneit = sexit.value().begin(); boneit != sexit.value().end(); ++boneit) {
+								float x = 0;
+								float y = 0;
+								float z = 0;
+								float scale = 1;
+								for (auto valit = boneit.value().begin(); valit != boneit.value().end(); ++valit) {
+									if (valit.key() == "X") {
+										x = valit.value().get<float>();
+									}
+									else if (valit.key() == "Y") {
+										y = valit.value().get<float>();
+									}
+									else if (valit.key() == "Z") {
+										z = valit.value().get<float>();
+									}
+									else if (valit.key() == "Scale") {
+										scale = valit.value().get<float>();
+									}
+								}
+								auto existit = customRaceMaleTranslations.find(form);
+								if (existit == customRaceMaleTranslations.end()) {
+									customRaceMaleTranslations.insert(pair<TESForm*, vector<TranslationData>>(form, vector<TranslationData> {
+										TranslationData(boneit.key(), NiPoint3(x, y, z), scale)
+									}));
+								}
+								else {
+									existit->second.push_back(TranslationData(boneit.key(), NiPoint3(x, y, z), scale));
+								}
+								_MESSAGE("Race %s Male Bone %s X %f Y %f Z %f Scale %f", form->GetFormEditorID(), boneit.key().c_str(), x, y, z, scale);
+							}
+						}
 					}
 				}
 			}
