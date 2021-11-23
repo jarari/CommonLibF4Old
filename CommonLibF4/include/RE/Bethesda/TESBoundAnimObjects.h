@@ -381,6 +381,12 @@ namespace RE
 			return root;
 		}
 
+		[[nodiscard]] uint32_t GetSex() noexcept {
+			using func_t = decltype(&TESNPC::GetSex);
+			REL::Relocation<func_t> func{ REL::ID(1257181) };
+			return func(this);
+		}
+
 		[[nodiscard]] bool UsingAlternateHeadPartList() const;
 
 		// members
