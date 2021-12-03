@@ -1,10 +1,16 @@
+#include <algorithm>
+#include <chrono>
 #include <fstream>
+#include <random>
 #include <SimpleIni.h>
 #include "nlohmann/json.hpp"
 using namespace RE;
 using std::ifstream;
 using std::unordered_map;
 using std::vector;
+using std::queue;
+using std::default_random_engine;
+using std::shuffle;
 
 char tempbuf[8192] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
@@ -88,13 +94,14 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 }
 
 namespace F4 {
+	struct Unk {
+		uint32_t unk00 = 0xFFFFFFFF;
+		uint32_t unk04 = 0x0;
+		uint32_t unk08 = 1;
+	};
 
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
-		struct Unk {
-			uint32_t unk00 = 0xFFFFFFFF;
-			uint32_t unk04 = 0x0;
-		};
-		typedef bool* func_t(Unk&, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
+		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
 		REL::Relocation<func_t> func{ REL::ID(376497) };
 		Unk u;
 		return func(u, sndr, pos, node);
@@ -113,25 +120,59 @@ namespace F4 {
 	}
 }
 
-REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };
+REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
 CSimpleIniA ini(true, true, false);
 PlayerCharacter* p;
 PlayerCamera* pcam;
-vector<BGSSoundDescriptorForm*> soundList;
+vector<TESRace*> headshotExcludedList;
+vector<BGSSoundDescriptorForm*> hs_body_soundList;
+vector<BGSSoundDescriptorForm*> hs_head_soundList;
+vector<BGSSoundDescriptorForm*> ks_body_soundList;
+vector<BGSSoundDescriptorForm*> ks_head_soundList;
 BGSSoundDescriptorForm* hitSound;
-uint64_t lastHitSound;
+BGSSoundDescriptorForm* hitSoundHead;
+BGSSoundDescriptorForm* killSound;
+BGSSoundDescriptorForm* killSoundHead;
+BGSListForm* killQuoteList;
+vector<int> killQuoteQueue;
+float lastHitSound;
+float lastKillSound;
+std::chrono::system_clock::duration lastKillQuote = std::chrono::system_clock::now().time_since_epoch();
+Actor* lastVictimHit;
+uint32_t lastBodypartHit;
+float lastTimeHit;
 TESImageSpaceModifier* imod;
 unordered_map<TESForm*, float> customShakeDuration;
 unordered_map<TESForm*, float> customShakeStrength;
 unordered_map<TESForm*, float> customFXStrength;
 
 bool enableHitSound = true;
-int soundType = 0;
-uint8_t freqShift = 0;
-uint8_t freqVariance = 0;
-uint16_t staticAttenuation = 700;
+int hs_body_soundType = 0;
+uint8_t hs_body_freqShift = 0;
+uint8_t hs_body_freqVariance = 0;
+uint16_t hs_body_staticAttenuation = 700;
+bool enableHitSoundHeadshot = true;
+int hs_head_soundType = 0;
+uint8_t hs_head_freqShift = 0;
+uint8_t hs_head_freqVariance = 0;
+uint16_t hs_head_staticAttenuation = 700;
 bool playOnAliveOnly = true;
 bool playOnGunOnly = true;
+
+bool enableKillSound = true;
+int ks_body_soundType = 0;
+uint8_t ks_body_freqShift = 0;
+uint8_t ks_body_freqVariance = 0;
+uint16_t ks_body_staticAttenuation = 700;
+bool enableKillSoundHeadshot = true;
+int ks_head_soundType = 0;
+uint8_t ks_head_freqShift = 0;
+uint8_t ks_head_freqVariance = 0;
+uint16_t ks_head_staticAttenuation = 700;
+
+bool enableKillQuote = true;
+uint16_t kq_staticAttenuation = 700;
+float kq_minimumCooldown = 2.0f;
 
 float shakeDuration = 0;
 float shakeStrength = 1;
@@ -160,6 +201,7 @@ float minimumFXStrength = 0.5f;
 float maximumFXStrength = 0.8f;
 
 bool aimRecoveryDisabled = false;
+bool disableOnFreecam = true;
 
 struct _TESHitEvent {
 	NiPoint3 hitPos; //0x0000 
@@ -176,16 +218,18 @@ struct _TESHitEvent {
 	char pad_0x0068[0x18]; //0x0068
 	TESForm* unkitem; //0x0080 
 	char pad_0x0088[0x8]; //0x0088
-	float N000005CF; //0x0090 
-	float N00000831; //0x0094 
-	float N000005D0; //0x0098 
-	float N00000834; //0x009C 
+	float unk90; //0x0090 
+	float unk94; //0x0094 
+	float unk98; //0x0098 
+	float unk9C; //0x009C 
 	char pad_0x00A0[0x10]; //0x00A0
-	float N000005E7; //0x00B0 
-	float N0000082E; //0x00B4 
+	float unkB0; //0x00B0 
+	float unkB4; //0x00B4 
 	char pad_0x00B8[0x8]; //0x00B8
-	float N000005E9; //0x00C0 
-	char pad_0x00C4[0x5C]; //0x00C4
+	float unkC0; //0x00C0 
+	char pad_0x00C4[0xC]; //0x00C4
+	uint32_t bodypart; //0x00D0 
+	char pad_0x00D4[0x4C]; //0x00D4
 	TESObjectREFR* victim; //0x0120 
 	char pad_0x0128[0x38]; //0x0128
 	TESObjectREFR* attacker; //0x0160 
@@ -201,17 +245,37 @@ public:
 
 class HitEventSink : public BSTEventSink<_TESHitEvent> {
 public:
-	virtual BSEventNotifyControl ProcessEvent(const _TESHitEvent& a_event, BSTEventSource<_TESHitEvent>* a_source) override {
-		if (enableHitSound && (a_event.attackData || a_event.weapon)) {
-			if (!playOnGunOnly || (a_event.weaponInstance && a_event.weaponInstance->type == 9)) {
-				if (a_event.attacker == PlayerCharacter::GetSingleton() && a_event.victim && a_event.victim->formType == ENUM_FORM_ID::kACHR) {
-					if (*ptr_engineTime - lastHitSound > 10) {
-						if (!playOnAliveOnly || (playOnAliveOnly && !a_event.victim->IsDead(true))) {
-							F4::PlaySound(hitSound, a_event.attacker->data.location, a_event.attacker->Get3D());
+	virtual BSEventNotifyControl ProcessEvent(const _TESHitEvent& evn, BSTEventSource<_TESHitEvent>* src) override {
+		if ((evn.attackData || evn.weapon) && evn.attacker == p && evn.victim && evn.victim->formType == ENUM_FORM_ID::kACHR) {
+			if (enableHitSound) {
+				if (!playOnGunOnly || (evn.weaponInstance && evn.weaponInstance->type == 9)) {
+					if (*ptr_engineTime - lastHitSound > 0.001f) {
+						if (!playOnAliveOnly || (playOnAliveOnly && !evn.victim->IsDead(true))) {
+							BGSSoundDescriptorForm* sndr = hitSound;
+							if (enableHitSoundHeadshot && evn.bodypart == 1) {
+								bool raceHasHead = true;
+								int i = 0;
+								while (raceHasHead && i < headshotExcludedList.size()) {
+									if (headshotExcludedList[i] == ((Actor*)evn.victim)->race) {
+										raceHasHead = false;
+									}
+									++i;
+								}
+
+								if (raceHasHead) {
+									sndr = hitSoundHead;
+								}
+							}
+							F4::PlaySound(sndr, evn.attacker->data.location, pcam->cameraRoot.get());
 							lastHitSound = *ptr_engineTime;
 						}
 					}
 				}
+			}
+			if (enableKillSound || enableKillQuote) {
+				lastVictimHit = (Actor*)evn.victim;
+				lastBodypartHit = evn.bodypart;
+				lastTimeHit = *ptr_engineTime;
 			}
 		}
 		return BSEventNotifyControl::kContinue;
@@ -249,7 +313,7 @@ public:
 			if (p->currentProcess) {
 				BSTArray<EquippedItem>& equipped = p->currentProcess->middleHigh->equippedItems;
 				if (equipped.size() > 0 && equipped[0].item.instanceData &&
-					((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type == 9) {
+					((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type == 9 && (!disableOnFreecam || pcam->currentState != pcam->cameraStates[CameraState::kFree])) {
 					if (enableShake) {
 						float tempShakeDuration = shakeDuration;
 						float tempShakeStrength = shakeStrength;
@@ -303,13 +367,6 @@ protected:
 	static std::unordered_map<uint64_t, FnProcessEvent> fnHash;
 };
 std::unordered_map<uint64_t, AnimationGraphEventWatcher::FnProcessEvent> AnimationGraphEventWatcher::fnHash;
-
-struct TESEquipEvent {
-	Actor* a;					//00
-	uint32_t formId;			//0C
-	uint32_t unk08;				//08
-	uint64_t flag;				//10 0x00000000ff000000 for unequip
-};
 
 float Lerp(float a, float b, float t) {
 	return a + (b - a) * min(max(t, 0), 1);
@@ -379,6 +436,13 @@ void CalculateScore(Actor* a) {
 	}
 }
 
+struct TESEquipEvent {
+	Actor* a;					//00
+	uint32_t formId;			//0C
+	uint32_t unk08;				//08
+	uint64_t flag;				//10 0x00000000ff000000 for unequip
+};
+
 class EquipWatcher : public BSTEventSink<TESEquipEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const TESEquipEvent& evn, BSTEventSource<TESEquipEvent>* a_source) {
@@ -390,7 +454,7 @@ public:
 		}
 		return BSEventNotifyControl::kContinue;
 	}
-	F4_HEAP_REDEFINE_NEW(EquipEventSink);
+	F4_HEAP_REDEFINE_NEW(EquipWatcher);
 };
 
 class EquipEventSource : public BSTEventSource<TESEquipEvent> {
@@ -399,33 +463,168 @@ public:
 		REL::Relocation<EquipEventSource*> singleton{ REL::ID(485633) };
 		return singleton.get();
 	}
+}; 
+
+void ShuffleKillQuote() {
+	unsigned seed = 0;
+	shuffle(killQuoteQueue.begin(), killQuoteQueue.end(), default_random_engine(seed));
+}
+
+class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const MenuOpenCloseEvent& evn, BSTEventSource<MenuOpenCloseEvent>* src) override {
+		if (evn.opening && evn.menuName == BSFixedString("LoadingMenu")) {
+			ShuffleKillQuote();
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+public:
+	F4_HEAP_REDEFINE_NEW(MenuWatcher);
+};
+
+struct TESDeathEvent {
+	TESObjectREFR* victim;
+	TESObjectREFR* attacker;
+	bool processed;
+};
+
+class DeathWatcher : public BSTEventSink<TESDeathEvent> {
+public:
+	virtual BSEventNotifyControl ProcessEvent(const TESDeathEvent& evn, BSTEventSource<TESDeathEvent>* a_source) {
+		if (!evn.processed && evn.attacker == p && evn.victim == lastVictimHit && *ptr_engineTime - lastTimeHit < 0.075f && evn.attacker->Get3D()) {
+			if (enableKillSound) {
+				if (*ptr_engineTime - lastKillSound > 0.001f) {
+					BGSSoundDescriptorForm* sndr = killSound;
+					if (enableKillSoundHeadshot && lastVictimHit == evn.victim && lastBodypartHit == 1) {
+						bool raceHasHead = true;
+						int i = 0;
+						while (raceHasHead && i < headshotExcludedList.size()) {
+							if (headshotExcludedList[i] == ((Actor*)evn.victim)->race) {
+								raceHasHead = false;
+							}
+							++i;
+						}
+
+						if (raceHasHead) {
+							sndr = killSoundHead;
+						}
+					}
+					F4::PlaySound(sndr, evn.attacker->data.location, pcam->cameraRoot.get());
+					lastKillSound = *ptr_engineTime;
+				}
+			}
+			if (enableKillQuote) {
+				if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch() - lastKillQuote).count() >= kq_minimumCooldown * 1000.0f) {
+					int i = killQuoteQueue.front();
+					BGSSoundDescriptorForm* sndr = (BGSSoundDescriptorForm*)killQuoteList->arrayOfForms[i];
+					if (sndr && sndr->formType == ENUM_FORM_ID::kSNDR) {
+						F4::PlaySound(sndr, evn.attacker->data.location, pcam->cameraRoot.get());
+						lastKillQuote = std::chrono::system_clock::now().time_since_epoch();
+					}
+					killQuoteQueue.erase(killQuoteQueue.begin());
+					killQuoteQueue.push_back(i);
+				}
+			}
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+	F4_HEAP_REDEFINE_NEW(DeathWatcher);
+};
+
+class DeathEventSource : public BSTEventSource<TESDeathEvent> {
+public:
+	[[nodiscard]] static DeathEventSource* GetSingleton() {
+		REL::Relocation<DeathEventSource*> singleton{ REL::ID(1058809) };
+		return singleton.get();
+	}
 };
 
 void InitializePlugin() {
 	p = PlayerCharacter::GetSingleton();
 	pcam = PlayerCamera::GetSingleton();
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x800));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x801));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x802));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x803));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x804));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x805));
-	soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x806));
-	hitSound = soundList[0];
-	for (auto it = soundList.begin(); it != soundList.end(); ++it) {
-		_MESSAGE("HitSound %llx", *it);;
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x800));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x801));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x802));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x803));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x804));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x805));
+	hs_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x806));
+	hitSound = hs_body_soundList[0];
+	for (auto it = hs_body_soundList.begin(); it != hs_body_soundList.end(); ++it) {
+		_MESSAGE("HitSound %llx", *it);
 	}
 
-	HitEventSource* src = HitEventSource::GetSingleton();
-	_MESSAGE("HitEventSource %llx", src);
-	HitEventSink* sink = new HitEventSink();
-	src->RegisterSink(sink);
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x808));
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x809));
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80A));
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80B));
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80C));
+	hs_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80D));
+	hitSoundHead = hs_head_soundList[0];
+	for (auto it = hs_head_soundList.begin(); it != hs_head_soundList.end(); ++it) {
+		_MESSAGE("HitSound Headshot %llx", *it);
+	}
+
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80E));
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x80F));
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x810));
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x811));
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x812));
+	ks_body_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x813));
+	killSound = ks_body_soundList[0];
+	for (auto it = ks_body_soundList.begin(); it != ks_body_soundList.end(); ++it) {
+		_MESSAGE("KillSound %llx", *it);
+	}
+
+	ks_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x814));
+	ks_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x815));
+	ks_head_soundList.push_back((BGSSoundDescriptorForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x816));
+	killSoundHead = ks_head_soundList[0];
+	for (auto it = ks_head_soundList.begin(); it != ks_head_soundList.end(); ++it) {
+		_MESSAGE("KillSound Headshot %llx", *it);
+	}
+
+	killQuoteList = (BGSListForm*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x817);
+	for (uint32_t i = 0; i < killQuoteList->arrayOfForms.size(); ++i) {
+		killQuoteQueue.push_back(i);
+	}
 
 	imod = (TESImageSpaceModifier*)GetFormFromMod(std::string("SimpleImpact.esp"), 0x807);
 	_MESSAGE("ImageSpaceModifier %llx", imod);
+
+	BGSKeyword* actorTypeLibertyPrime = (BGSKeyword*)GetFormFromMod(std::string("Fallout4.esm"), 0x10D529);
+	BGSKeyword* actorTypeMirelurk = (BGSKeyword*)GetFormFromMod(std::string("Fallout4.esm"), 0x2CB71);
+	BGSKeyword* actorTypeRobot = (BGSKeyword*)GetFormFromMod(std::string("Fallout4.esm"), 0x2CB73);
+	BGSKeyword* actorTypeTurret = (BGSKeyword*)GetFormFromMod(std::string("Fallout4.esm"), 0xB2BF3);
+	BGSKeyword* isVertibird = (BGSKeyword*)GetFormFromMod(std::string("Fallout4.esm"), 0xF9899);
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<TESRace*> races = dh->GetFormArray<TESRace>();
+	for (auto it = races.begin(); it != races.end(); ++it) {
+		BGSKeyword** keywords = (*it)->keywords;
+		uint32_t i = 0;
+		while (i < (*it)->numKeywords) {
+			if (keywords[i] == actorTypeLibertyPrime || keywords[i] == actorTypeMirelurk
+				|| keywords[i] == actorTypeRobot || keywords[i] == actorTypeTurret || keywords[i] == isVertibird) {
+				headshotExcludedList.push_back(*it);
+				i = (*it)->numKeywords;
+				_MESSAGE("%s excluded", (*it)->GetFullName());
+			}
+			++i;
+		}
+	}
+
 	((AnimationGraphEventWatcher*)((uint64_t)p + 0x38))->HookSink();
+
+	HitEventSink* sink = new HitEventSink();
+	HitEventSource::GetSingleton()->RegisterSink(sink);
+
 	EquipWatcher* ew = new EquipWatcher();
 	EquipEventSource::GetSingleton()->RegisterSink(ew);
+
+	DeathWatcher* dw = new DeathWatcher();
+	DeathEventSource::GetSingleton()->RegisterSink(dw);
+
+	MenuWatcher* mw = new MenuWatcher();
+	UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mw);
 }
 
 void LoadConfigs() {
@@ -434,10 +633,38 @@ void LoadConfigs() {
 	enableHitSound = std::stoi(ini.GetValue("HitSound", "Enabled", "1")) > 0;
 	if (enableHitSound)
 		_MESSAGE("HitSound Enabled");
-	soundType = min(max(std::stoi(ini.GetValue("HitSound", "SoundType", "1")), 1), 7);
-	freqShift = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyShift", "0"));
-	freqVariance = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyVariance", "0"));
-	staticAttenuation = (uint16_t)std::stoi(ini.GetValue("HitSound", "StaticAttenuation", "7")) * 100;
+	hs_body_soundType = min(max(std::stoi(ini.GetValue("HitSound", "SoundType", "1")), 1), 7);
+	hs_body_freqShift = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyShift", "0"));
+	hs_body_freqVariance = (uint8_t)std::stoi(ini.GetValue("HitSound", "FrequencyVariance", "0"));
+	hs_body_staticAttenuation = (uint16_t)std::stoi(ini.GetValue("HitSound", "StaticAttenuation", "7")) * 100;
+
+	enableHitSoundHeadshot = std::stoi(ini.GetValue("HitSound", "HeadshotEnabled", "1")) > 0;
+	if (enableHitSoundHeadshot)
+		_MESSAGE("HitSound Headshot Enabled");
+	hs_head_soundType = min(max(std::stoi(ini.GetValue("HitSound", "HeadshotSoundType", "1")), 1), 6);
+	hs_head_freqShift = (uint8_t)std::stoi(ini.GetValue("HitSound", "HeadshotFrequencyShift", "0"));
+	hs_head_freqVariance = (uint8_t)std::stoi(ini.GetValue("HitSound", "HeadshotFrequencyVariance", "0"));
+	hs_head_staticAttenuation = (uint16_t)std::stoi(ini.GetValue("HitSound", "HeadshotStaticAttenuation", "7")) * 100;
+
+	enableKillSound = std::stoi(ini.GetValue("KillSound", "Enabled", "1")) > 0;
+	if (enableKillSound)
+		_MESSAGE("KillSound Enabled");
+	ks_body_soundType = min(max(std::stoi(ini.GetValue("KillSound", "SoundType", "1")), 1), 6);
+	ks_body_freqShift = (uint8_t)std::stoi(ini.GetValue("KillSound", "FrequencyShift", "0"));
+	ks_body_freqVariance = (uint8_t)std::stoi(ini.GetValue("KillSound", "FrequencyVariance", "0"));
+	ks_body_staticAttenuation = (uint16_t)std::stoi(ini.GetValue("KillSound", "StaticAttenuation", "7")) * 100;
+
+	enableKillSoundHeadshot = std::stoi(ini.GetValue("KillSound", "HeadshotEnabled", "1")) > 0;
+	if (enableKillSoundHeadshot)
+		_MESSAGE("KillSound Headshot Enabled");
+	ks_head_soundType = min(max(std::stoi(ini.GetValue("KillSound", "HeadshotSoundType", "1")), 1), 3);
+	ks_head_freqShift = (uint8_t)std::stoi(ini.GetValue("KillSound", "HeadshotFrequencyShift", "0"));
+	ks_head_freqVariance = (uint8_t)std::stoi(ini.GetValue("KillSound", "HeadshotFrequencyVariance", "0"));
+	ks_head_staticAttenuation = (uint16_t)std::stoi(ini.GetValue("KillSound", "HeadshotStaticAttenuation", "7")) * 100;
+
+	enableKillQuote = std::stoi(ini.GetValue("KillQuote", "Enabled", "1")) > 0;
+	kq_staticAttenuation = (uint16_t)std::stoi(ini.GetValue("KillQuote", "StaticAttenuation", "7")) * 100;
+	kq_minimumCooldown = std::stof(ini.GetValue("KillQuote", "Cooldown", "2.0"));
 
 	/* BGSSoundDescriptor
 	* 0x8 BGSSoundCategory*
@@ -449,13 +676,37 @@ void LoadConfigs() {
 	* 0x48 BGSSoundOutput
 	*/
 
-	hitSound = soundList[soundType - 1];
-	*(uint8_t*)((uintptr_t)hitSound->impl + 0x38) = freqShift;
-	*(uint8_t*)((uintptr_t)hitSound->impl + 0x39) = freqVariance;
-	*(uint16_t*)((uintptr_t)hitSound->impl + 0x3C) = staticAttenuation;
+	hitSound = hs_body_soundList[hs_body_soundType - 1];
+	*(uint8_t*)((uintptr_t)hitSound->impl + 0x38) = hs_body_freqShift;
+	*(uint8_t*)((uintptr_t)hitSound->impl + 0x39) = hs_body_freqVariance;
+	*(uint16_t*)((uintptr_t)hitSound->impl + 0x3C) = hs_body_staticAttenuation;
+
+	hitSoundHead = hs_head_soundList[hs_head_soundType - 1];
+	*(uint8_t*)((uintptr_t)hitSoundHead->impl + 0x38) = hs_head_freqShift;
+	*(uint8_t*)((uintptr_t)hitSoundHead->impl + 0x39) = hs_head_freqVariance;
+	*(uint16_t*)((uintptr_t)hitSoundHead->impl + 0x3C) = hs_head_staticAttenuation;
 
 	playOnAliveOnly = std::stoi(ini.GetValue("HitSound", "AliveOnly", "1")) > 0;
 	playOnGunOnly = std::stoi(ini.GetValue("HitSound", "GunOnly", "1")) > 0;
+
+	killSound = ks_body_soundList[ks_body_soundType - 1];
+	*(uint8_t*)((uintptr_t)killSound->impl + 0x38) = ks_body_freqShift;
+	*(uint8_t*)((uintptr_t)killSound->impl + 0x39) = ks_body_freqVariance;
+	*(uint16_t*)((uintptr_t)killSound->impl + 0x3C) = ks_body_staticAttenuation;
+
+	killSoundHead = ks_head_soundList[ks_head_soundType - 1];
+	*(uint8_t*)((uintptr_t)killSoundHead->impl + 0x38) = ks_head_freqShift;
+	*(uint8_t*)((uintptr_t)killSoundHead->impl + 0x39) = ks_head_freqVariance;
+	*(uint16_t*)((uintptr_t)killSoundHead->impl + 0x3C) = ks_head_staticAttenuation;
+	
+	for (auto it = killQuoteList->arrayOfForms.begin(); it != killQuoteList->arrayOfForms.end(); ++it) {
+		if ((*it)->formType == ENUM_FORM_ID::kSNDR) {
+			*(uint16_t*)((uintptr_t)((BGSSoundDescriptorForm*)*it)->impl + 0x3C) = kq_staticAttenuation;
+		}
+		else {
+			_MESSAGE("Non-sound form detected in the form list!");
+		}
+	}
 
 	enableShake = std::stoi(ini.GetValue("Shake", "Enabled", "1")) > 0;
 	if (enableShake)
@@ -496,6 +747,7 @@ void LoadConfigs() {
 		}
 		aimRecoveryDisabled = true;
 	}
+	disableOnFreecam = std::stoi(ini.GetValue("Extra", "DisableOnFreecam", "1")) > 0;
 	ini.Reset();
 
 	customShakeDuration.clear();
