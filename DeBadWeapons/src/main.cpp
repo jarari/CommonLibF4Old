@@ -193,7 +193,10 @@ SpellItem* avoidedDeath;
 BGSSoundDescriptorForm* deathMarkHeadSound;
 BGSSoundDescriptorForm* deathMarkTorsoSound;
 BGSSoundDescriptorForm* avoidedDeathSound;
-uint64_t lastDeathMarkSoundTime;
+BGSSoundDescriptorForm* avoidedDeathBuzzing;
+TESImageSpaceModifier* avoidedDeathIMOD;
+float lastDeathMarkSoundTime;
+float lastAvoidedDeathBuzzingTime;
 //몸통, 머리 등등 부위별 파츠타입
 std::vector<BGSBodyPartData::PartType> torsoParts = { BGSBodyPartData::PartType::COM, BGSBodyPartData::PartType::Torso, BGSBodyPartData::PartType::Pelvis };
 std::vector<BGSBodyPartData::PartType> headParts = { BGSBodyPartData::PartType::Eye, BGSBodyPartData::PartType::Head1, BGSBodyPartData::PartType::Head2, BGSBodyPartData::PartType::Brain };
@@ -256,7 +259,7 @@ struct BleedingData {
 	}
 };
 std::unordered_map<EFDBodyParts, BleedingData> bleedingConfigs;
-REL::Relocation<uint64_t*> ptr_engineTime{ REL::ID(1280610) };	//엔진 내부 업타임
+REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };	//엔진 내부 업타임
 
 BGSExplosion* globalExplosion;
 
@@ -370,6 +373,7 @@ void SetupWeapons() {
 void SetupArmors() {
 	CSimpleIniA::TNamesDepend helmetKeys;
 	ini.GetAllKeys("Helmet", helmetKeys);
+	helmetKeys.sort(CSimpleIniA::Entry::LoadOrder());
 	_MESSAGE("Helmet Tier References");
 	for (auto key = helmetKeys.begin(); key != helmetKeys.end(); ++key) {
 		uint16_t ref = (uint16_t)std::stoi(ini.GetValue("Helmet", key->pItem));
@@ -379,6 +383,7 @@ void SetupArmors() {
 
 	CSimpleIniA::TNamesDepend vestKeys;
 	ini.GetAllKeys("Vest", vestKeys);
+	vestKeys.sort(CSimpleIniA::Entry::LoadOrder());
 	_MESSAGE("Vest Tier References");
 	for (auto key = vestKeys.begin(); key != vestKeys.end(); ++key) {
 		uint16_t ref = (uint16_t)std::stoi(ini.GetValue("Vest", key->pItem));
@@ -465,6 +470,7 @@ void SetupDeathMark() {
 	laserConditions.push_back(torsoChance);
 	CSimpleIniA::TNamesDepend protectionKeys;
 	ini.GetAllKeys("Laser", protectionKeys);
+	protectionKeys.sort(CSimpleIniA::Entry::LoadOrder());
 	std::vector<uint16_t> laserChances;
 	for (auto key = protectionKeys.begin(); key != protectionKeys.end(); ++key) {
 		laserChances.push_back((uint16_t)std::stoi((ini.GetValue("Laser", key->pItem))));
@@ -585,9 +591,13 @@ void SetupDeathMark() {
 	deathMarkHeadSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x817);
 	deathMarkTorsoSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x818);
 	avoidedDeathSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x819);
+	avoidedDeathIMOD = (TESImageSpaceModifier*)GetFormFromMod("WB - EFD Damage System.esp", 0x872);
+	avoidedDeathBuzzing = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x873);
 	_MESSAGE("EFD Head DeathMark Sound %llx", deathMarkHeadSound);
 	_MESSAGE("EFD Torso DeathMark Sound %llx", deathMarkTorsoSound);
 	_MESSAGE("EFD Avoided Death Sound %llx", avoidedDeathSound);
+	_MESSAGE("EFD Avoided Death IMOD %llx", avoidedDeathIMOD);
+	_MESSAGE("EFD Avoided Death Buzzing %llx", avoidedDeathBuzzing);
 }
 
 void SetupBleeding() {
@@ -902,7 +912,7 @@ public:
 										_MESSAGE("Protection Chance %d result %d", chance, result);
 										if (result > chance) {
 											killDeathMarked->Cast(evn.caster.get(), a);
-											if (*ptr_engineTime - lastDeathMarkSoundTime > 10 && a->Get3D()) {
+											if (*ptr_engineTime - lastDeathMarkSoundTime > 0.01f && a->Get3D()) {
 												if (isTorso) {
 													F4::PlaySound(deathMarkTorsoSound, a->data.location, a->Get3D());
 												}
@@ -924,7 +934,13 @@ public:
 										//즉사 회피시 메세지 표기
 										else if (a == p) {
 											avoidedDeath->Cast(a, a);
+											F4::ShakeCamera(1.0f, a->data.location, 0.2f, 1.0f);
 											F4::PlaySound(avoidedDeathSound, p->data.location, PlayerCamera::GetSingleton()->cameraRoot.get());
+											F4::ApplyImageSpaceModifier(avoidedDeathIMOD, 1.0f, nullptr);
+											if (*ptr_engineTime - lastAvoidedDeathBuzzingTime > 4.0f) {
+												F4::PlaySound(avoidedDeathBuzzing, p->data.location, PlayerCamera::GetSingleton()->cameraRoot.get());
+												lastAvoidedDeathBuzzingTime = *ptr_engineTime;
+											}
 										}
 									}
 								}
@@ -1169,19 +1185,19 @@ public:
 						else {
 							_MESSAGE("ActiveEffectList not found. Bleeding can't be processed");
 						}
+						//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
+						if (partFound <= 2) {
+							CartridgeData& gcd = cartridgeData.at(std::string("Global"));
+							for (int j = 0; j < maxTier; ++j) {
+								gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.25f + gd.formulaD, 100), 0);
+							}
+						}
 						//방어력 감소 효과 및 즉사 효과 발동
 						if (this->shooter.get()) {
 							EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
 							_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
 							EFDDeathMarkGlobal->Cast(this->shooter.get().get(), a);
 						}
-					}
-				}
-				//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
-				if (partFound <= 2) {
-					CartridgeData& gcd = cartridgeData.at(std::string("Global"));
-					for (int j = 0; j < maxTier; ++j) {
-						gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.58823529f + gd.formulaD, 100), 0);
 					}
 				}
 			}
