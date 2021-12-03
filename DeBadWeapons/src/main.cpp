@@ -90,12 +90,75 @@ SpellItem* GetSpellByFullName(std::string spellname) {
 	return nullptr;
 }
 
+TESForm* GetFormFromMod(std::string modname, uint32_t formid) {
+	if (!modname.length() || !formid)
+		return nullptr;
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	TESFile* modFile = nullptr;
+	for (auto it = dh->files.begin(); it != dh->files.end(); ++it) {
+		TESFile* f = *it;
+		if (strcmp(f->filename, modname.c_str()) == 0) {
+			modFile = f;
+			break;
+		}
+	}
+	if (!modFile)
+		return nullptr;
+	uint8_t modIndex = modFile->compileIndex;
+	uint32_t id = formid;
+	if (modIndex < 0xFE) {
+		id |= ((uint32_t)modIndex) << 24;
+	}
+	else {
+		uint16_t lightModIndex = modFile->smallFileCompileIndex;
+		if (lightModIndex != 0xFFFF) {
+			id |= 0xFE000000 | (uint32_t(lightModIndex) << 12);
+		}
+	}
+	return TESForm::GetFormByID(id);
+}
+
+bool CheckPA(Actor* a) {
+	if (!a->extraList) {
+		return false;
+	}
+	return a->extraList->HasType(EXTRA_DATA_TYPE::kPowerArmor);;
+}
+
+namespace F4 {
+	struct Unk {
+		uint32_t unk00 = 0xFFFFFFFF;
+		uint32_t unk04 = 0x0;
+		uint32_t unk08 = 1;
+	};
+
+	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
+		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
+		REL::Relocation<func_t> func{ REL::ID(376497) };
+		Unk u;
+		return func(u, sndr, pos, node);
+	}
+
+	void ShakeCamera(float mul, NiPoint3 origin, float duration, float strength) {
+		using func_t = decltype(&F4::ShakeCamera);
+		REL::Relocation<func_t> func{ REL::ID(758209) };
+		return func(mul, origin, duration, strength);
+	}
+
+	void ApplyImageSpaceModifier(TESImageSpaceModifier* imod, float strength, NiAVObject* target) {
+		using func_t = decltype(&F4::ApplyImageSpaceModifier);
+		REL::Relocation<func_t> func{ REL::ID(179769) };
+		return func(imod, strength, target);
+	}
+}
+
 #pragma endregion
 
 #pragma region GlobalVariables
 
 //ini 정의, UTF-8 사용, 멀티키 X, 멀티라인 X 설정
 CSimpleIniA ini(true, false, false);
+PlayerCharacter* p;
 bool playerForceKill = false;
 std::unordered_map<TESAmmo*, bool> ammoWhitelist;
 std::vector<BGSProjectile*> EFDProjectiles;
@@ -127,6 +190,10 @@ SpellItem* torsoHitMark;
 SpellItem* EFDDeathMarkGlobal;
 SpellItem* killDeathMarked;
 SpellItem* avoidedDeath;
+BGSSoundDescriptorForm* deathMarkHeadSound;
+BGSSoundDescriptorForm* deathMarkTorsoSound;
+BGSSoundDescriptorForm* avoidedDeathSound;
+uint64_t lastDeathMarkSoundTime;
 //몸통, 머리 등등 부위별 파츠타입
 std::vector<BGSBodyPartData::PartType> torsoParts = { BGSBodyPartData::PartType::COM, BGSBodyPartData::PartType::Torso, BGSBodyPartData::PartType::Pelvis };
 std::vector<BGSBodyPartData::PartType> headParts = { BGSBodyPartData::PartType::Eye, BGSBodyPartData::PartType::Head1, BGSBodyPartData::PartType::Head2, BGSBodyPartData::PartType::Brain };
@@ -134,6 +201,7 @@ std::vector<BGSBodyPartData::PartType> larmParts = { BGSBodyPartData::PartType::
 std::vector<BGSBodyPartData::PartType> llegParts = { BGSBodyPartData::PartType::LeftLeg1, BGSBodyPartData::PartType::LeftFoot };
 std::vector<BGSBodyPartData::PartType> rarmParts = { BGSBodyPartData::PartType::RightArm1, BGSBodyPartData::PartType::Weapon };
 std::vector<BGSBodyPartData::PartType> rlegParts = { BGSBodyPartData::PartType::RightLeg1, BGSBodyPartData::PartType::RightFoot };
+std::vector<TESRace*> headshotExcludedList;
 
 enum EFDBodyParts {
 	None,
@@ -492,6 +560,34 @@ void SetupDeathMark() {
 	_MESSAGE("EFD Torso HitMark %llx", torsoHitMark);
 	_MESSAGE("EFD Kill DeathMarked %llx", killDeathMarked);
 	_MESSAGE("EFD Avoided Death %llx", avoidedDeath);
+
+	BGSKeyword* actorTypeLibertyPrime = (BGSKeyword*)TESForm::GetFormByID(0x10D529);
+	BGSKeyword* actorTypeMirelurk = (BGSKeyword*)TESForm::GetFormByID(0x2CB71);
+	BGSKeyword* actorTypeRobot = (BGSKeyword*)TESForm::GetFormByID(0x2CB73);
+	BGSKeyword* actorTypeTurret = (BGSKeyword*)TESForm::GetFormByID(0xB2BF3);
+	BGSKeyword* isVertibird = (BGSKeyword*)TESForm::GetFormByID(0xF9899);
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<TESRace*> races = dh->GetFormArray<TESRace>();
+	for (auto it = races.begin(); it != races.end(); ++it) {
+		BGSKeyword** keywords = (*it)->keywords;
+		uint32_t i = 0;
+		while (i < (*it)->numKeywords) {
+			if (keywords[i] == actorTypeLibertyPrime || keywords[i] == actorTypeMirelurk
+				|| keywords[i] == actorTypeRobot || keywords[i] == actorTypeTurret || keywords[i] == isVertibird) {
+				headshotExcludedList.push_back(*it);
+				i = (*it)->numKeywords;
+				_MESSAGE("%s excluded from headshot", (*it)->GetFullName());
+			}
+			++i;
+		}
+	}
+
+	deathMarkHeadSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x817);
+	deathMarkTorsoSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x818);
+	avoidedDeathSound = (BGSSoundDescriptorForm*)GetFormFromMod("WB - EFD Damage System.esp", 0x819);
+	_MESSAGE("EFD Head DeathMark Sound %llx", deathMarkHeadSound);
+	_MESSAGE("EFD Torso DeathMark Sound %llx", deathMarkTorsoSound);
+	_MESSAGE("EFD Avoided Death Sound %llx", avoidedDeathSound);
 }
 
 void SetupBleeding() {
@@ -741,6 +837,19 @@ public:
 	F4_HEAP_REDEFINE_NEW(ObjectLoadWatcher);
 };
 
+class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const MenuOpenCloseEvent& evn, BSTEventSource<MenuOpenCloseEvent>* src) override {
+		if (!evn.opening && evn.menuName == BSFixedString("HUDMenu")) {
+			if (CheckPA(p)) {
+				CalculateArmorTiers(p);
+			}
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+public:
+	F4_HEAP_REDEFINE_NEW(MenuWatcher);
+};
+
 /*
 * 마법 효과 이벤트
 * 즉사 효과 발동시 확률 계산에 이용됨
@@ -781,13 +890,28 @@ public:
 									if (hasDeathChance) {
 										ActorValueInfo* avif = isTorso ? vestTier : helmetTier;
 										uint16_t chance = cdlookup->second.protectionChances[(int)a->GetActorValue(*avif)];
+										if (isTorso && a->GetActorValue(*enduranceCondition) == 0) {
+											chance = 0;
+										}
+										else if (!isTorso && a->GetActorValue(*perceptionCondition) == 0) {
+											chance = 0;
+										}
 										std::mt19937 e{ rd() }; // or std::default_random_engine e{rd()};
 										std::uniform_int_distribution<uint16_t> dist{ 1, 100 };
 										uint16_t result = dist(e);
 										_MESSAGE("Protection Chance %d result %d", chance, result);
 										if (result > chance) {
-											killDeathMarked->Cast(a, a);
-											if (a == PlayerCharacter::GetSingleton()) {
+											killDeathMarked->Cast(evn.caster.get(), a);
+											if (*ptr_engineTime - lastDeathMarkSoundTime > 10 && a->Get3D()) {
+												if (isTorso) {
+													F4::PlaySound(deathMarkTorsoSound, a->data.location, a->Get3D());
+												}
+												else {
+													F4::PlaySound(deathMarkHeadSound, a->data.location, a->Get3D());
+												}
+												lastDeathMarkSoundTime = *ptr_engineTime;
+											}
+											if (a == p) {
 												//강제킬에 에센셜 해제 기능 추가 필요
 												if (playerForceKill) {
 													a->KillImpl(a, 9999, true, false);
@@ -798,8 +922,9 @@ public:
 												_MESSAGE("%s(%llx) should be killed by deathmark", a->GetNPC()->fullName.c_str());
 										}
 										//즉사 회피시 메세지 표기
-										else if (a == PlayerCharacter::GetSingleton()) {
+										else if (a == p) {
 											avoidedDeath->Cast(a, a);
+											F4::PlaySound(avoidedDeathSound, p->data.location, PlayerCamera::GetSingleton()->cameraRoot.get());
 										}
 									}
 								}
@@ -822,7 +947,6 @@ public:
 class PlayerDeathWatcher : public BSTEventSink<BGSActorDeathEvent> {
 	virtual BSEventNotifyControl ProcessEvent(const BGSActorDeathEvent& evn, BSTEventSource<BGSActorDeathEvent>* src) override {
 		_MESSAGE("---Player Death---");
-		PlayerCharacter* p = PlayerCharacter::GetSingleton();
 		ActiveEffectList* aeList = p->GetActiveEffectList();
 		if (aeList) {
 			for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
@@ -899,7 +1023,6 @@ public:
 * 쌩 탄약 데미지를 이용해서 즉사 확률 계산 후 저장
 * 데스마크 실행
 */
-using std::unordered_map;
 class HookProjectile : public Projectile {
 public:
 	typedef bool (HookProjectile::* FnProcessImpacts)();
@@ -967,15 +1090,32 @@ public:
 								ammo->data.projectile->formID);
 				}
 
+				//헤드샷 제외 종족 확인
+				bool raceHasHead = true;
+				int i = 0;
+				while (raceHasHead && i < headshotExcludedList.size()) {
+					if (headshotExcludedList[i] == a->race) {
+						raceHasHead = false;
+					}
+					++i;
+				}
+
 				//AVIF에 마지막으로 맞은 부위 저장
 				int partFound = 0;
-				int i = 0;
+				i = 0;
 				std::vector<BGSBodyPartData::PartType> partsList[] = { headParts, torsoParts, larmParts, llegParts, rarmParts, rlegParts };
 				while (partFound == 0 && i < 6) {
 					for (auto part = partsList[i].begin(); part != partsList[i].end(); ++part) {
 						if (partType == *part) {
-							a->SetActorValue(*lasthitpart, i + 1);
-							partFound = i + 1;
+							//헤드샷 불가능 종족이면 몸샷으로 처리
+							if (i == 0 && !raceHasHead) {
+								a->SetActorValue(*lasthitpart, 2);
+								partFound = 2;
+							}
+							else {
+								a->SetActorValue(*lasthitpart, i + 1);
+								partFound = i + 1;
+							}
 						}
 					}
 					++i;
@@ -1038,7 +1178,7 @@ public:
 					}
 				}
 				//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
-				if (partFound <= 2) { //Only calculate this when needed.
+				if (partFound <= 2) {
 					CartridgeData& gcd = cartridgeData.at(std::string("Global"));
 					for (int j = 0; j < maxTier; ++j) {
 						gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.58823529f + gd.formulaD, 100), 0);
@@ -1055,9 +1195,9 @@ public:
 		fnHash.insert(std::pair<uint64_t, FnProcessImpacts>(addr, fn));
 	}
 protected:
-	static unordered_map<uint64_t, FnProcessImpacts> fnHash;
+	static std::unordered_map<uint64_t, FnProcessImpacts> fnHash;
 };
-unordered_map<uint64_t, HookProjectile::FnProcessImpacts> HookProjectile::fnHash;
+std::unordered_map<uint64_t, HookProjectile::FnProcessImpacts> HookProjectile::fnHash;
 
 void SetupProjectile() {
 	uint64_t addr;
@@ -1130,7 +1270,8 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 	message->RegisterListener([](F4SE::MessagingInterface::Message* msg) -> void {
 		//게임 데이터가 모두 로드된 시점 (메인화면이 나오기 직전)
 		if (msg->type == F4SE::MessagingInterface::kGameDataReady) {
-			_MESSAGE("PlayerCharacter %llx", PlayerCharacter::GetSingleton());
+			p = PlayerCharacter::GetSingleton();
+			_MESSAGE("PlayerCharacter %llx", p);
 			SetupWeapons();		//무기 데미지 설정
 			SetupArmors();		//방어구 티어 설정 로드
 			SetupDeathMark();	//즉사에 관련된 설정 및 AVIF, 스펠 등 변수 초기화
@@ -1152,6 +1293,13 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 			ObjectLoadedEventSource::GetSingleton()->RegisterSink(olw);
 
 			/*
+			* 메뉴 오픈 이벤트 후킹
+			* - 파워 아머 첫 탑승시 방어구 티어 판별
+			*/
+			MenuWatcher* mew = new MenuWatcher();
+			UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mew);
+
+			/*
 			* 매직 이벤트 적용 이벤트 후킹
 			* - 피격 부위에 따라 확률 즉사 적용
 			*/
@@ -1162,7 +1310,6 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 			* 플레이어 사망 이벤트 후킹
 			* - 플레이어 사망시 마지막 생체 정보 로그 출력
 			*/
-			PlayerCharacter* p = PlayerCharacter::GetSingleton();
 			PlayerDeathWatcher* pdw = new PlayerDeathWatcher();
 			((BSTEventSource<BGSActorDeathEvent>*)p)->RegisterSink(pdw);
 		}
