@@ -76,6 +76,7 @@ conditionally_add_subdirectory(AmmoUIHelper)
 conditionally_add_subdirectory(SimpleImpact)
 conditionally_add_subdirectory(NanakoHeadRelocator)
 conditionally_add_subdirectory(TagSlots)
+conditionally_add_subdirectory(WheelMenuHelper)
 
 
 include(FetchContent)
