@@ -204,7 +204,7 @@ std::vector<BGSBodyPartData::PartType> larmParts = { BGSBodyPartData::PartType::
 std::vector<BGSBodyPartData::PartType> llegParts = { BGSBodyPartData::PartType::LeftLeg1, BGSBodyPartData::PartType::LeftFoot };
 std::vector<BGSBodyPartData::PartType> rarmParts = { BGSBodyPartData::PartType::RightArm1, BGSBodyPartData::PartType::Weapon };
 std::vector<BGSBodyPartData::PartType> rlegParts = { BGSBodyPartData::PartType::RightLeg1, BGSBodyPartData::PartType::RightFoot };
-std::vector<TESRace*> headshotExcludedList;
+std::vector<TESRace*> deathMarkExcludedList;
 
 enum EFDBodyParts {
 	None,
@@ -580,7 +580,7 @@ void SetupDeathMark() {
 		while (i < (*it)->numKeywords) {
 			if (keywords[i] == actorTypeLibertyPrime || keywords[i] == actorTypeMirelurk
 				|| keywords[i] == actorTypeRobot || keywords[i] == actorTypeTurret || keywords[i] == isVertibird) {
-				headshotExcludedList.push_back(*it);
+				deathMarkExcludedList.push_back(*it);
 				i = (*it)->numKeywords;
 				_MESSAGE("%s excluded from headshot", (*it)->GetFullName());
 			}
@@ -874,7 +874,7 @@ public:
 		if (mgef->data.flags == 0x18008010 && mgef->data.castingType.underlying() == 1 && mgef->data.delivery.underlying() == 1) {
 			if (evn.target->formType == ENUM_FORM_ID::kACHR) {
 				Actor* a = ((Actor*)evn.target.get());
-				if (a->GetActorValue(*lasthitpart) <= 2) {
+				if (a->GetActorValue(*lasthitpart) <= 2 && !a->IsDead(true)) {
 					for (auto deathmark = deathmarkMGEFs.begin(); deathmark != deathmarkMGEFs.end(); ++deathmark) {
 						if (evn.magicEffectFormID == *deathmark) {
 							uintptr_t offset = 17;
@@ -1106,97 +1106,92 @@ public:
 								ammo->data.projectile->formID);
 				}
 
-				//헤드샷 제외 종족 확인
-				bool raceHasHead = true;
+				//데스마크 제외 종족 확인
+				bool deathMarkExcluded = false;
 				int i = 0;
-				while (raceHasHead && i < headshotExcludedList.size()) {
-					if (headshotExcludedList[i] == a->race) {
-						raceHasHead = false;
+				while (!deathMarkExcluded && i < deathMarkExcludedList.size()) {
+					if (deathMarkExcludedList[i] == a->race) {
+						deathMarkExcluded = true;
 					}
 					++i;
 				}
 
-				//AVIF에 마지막으로 맞은 부위 저장
-				int partFound = 0;
-				i = 0;
-				std::vector<BGSBodyPartData::PartType> partsList[] = { headParts, torsoParts, larmParts, llegParts, rarmParts, rlegParts };
-				while (partFound == 0 && i < 6) {
-					for (auto part = partsList[i].begin(); part != partsList[i].end(); ++part) {
-						if (partType == *part) {
-							//헤드샷 불가능 종족이면 몸샷으로 처리
-							if (i == 0 && !raceHasHead) {
-								a->SetActorValue(*lasthitpart, 2);
-								partFound = 2;
-							}
-							else {
+				if (!deathMarkExcluded) {
+					//AVIF에 마지막으로 맞은 부위 저장
+					int partFound = 0;
+					i = 0;
+					std::vector<BGSBodyPartData::PartType> partsList[] = { headParts, torsoParts, larmParts, llegParts, rarmParts, rlegParts };
+					while (partFound == 0 && i < 6) {
+						for (auto part = partsList[i].begin(); part != partsList[i].end(); ++part) {
+							if (partType == *part) {
 								a->SetActorValue(*lasthitpart, i + 1);
 								partFound = i + 1;
 							}
 						}
+						++i;
 					}
-					++i;
-				}
-				if (!partFound) {
-					a->SetActorValue(*lasthitpart, 7);
-				}
-				else {
-					_MESSAGE("Node : %s is %s (partType %d)", parent->name.c_str(), EFDBodyPartsName[partFound].c_str(), partType);
-					//물리데미지 탄에 대해서만 출혈 적용
-					if (this->damage > 0 && !this->IsBeamProjectile()) {
-						_MESSAGE("Physical projectile with base damage %f", this->damage);
-						//출혈이 이미 진행중인 경우 데미지를 증가시켜야 하니 마법 효과 리스트를 가져옴
-						ActiveEffectList* aeList = a->GetActiveEffectList();
-						if (aeList) {
-							//파츠별 출혈 데이터를 기반으로 확률 계산
-							BleedingData& bld = bleedingConfigs.at((EFDBodyParts)partFound);
-							_MESSAGE("Bleeding condition start %f current %f", bld.conditionStart, a->GetActorValue(**EFDConditions[partFound]));
-							if (bld.conditionStart >= a->GetActorValue(**EFDConditions[partFound])) {
-								float bleedChance = bld.chanceMin
-									+ (bld.chanceMax - bld.chanceMin) * (bld.conditionStart - max(bld.conditionThreshold, a->GetActorValue(**EFDConditions[partFound]))) / (bld.conditionStart - bld.conditionThreshold);
-								std::mt19937 e{ rd() };
-								std::uniform_real_distribution<float> dist{ 0, 100 };
-								float result = dist(e);
-								_MESSAGE("Bleeding Chance %f result %f", bleedChance, result);
-								if (result && result <= bleedChance) {
-									//마법 효과 리스트에서 출혈 효과를 찾아보고 출혈 효과가 있으면 강도 증가 + 갱신, 없으면 새로운 출혈 효과 적용
-									ActiveEffect* bleedae = nullptr;
-									for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
-										ActiveEffect* ae = it->get();
-										if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive) && ae->item == bld.spell) {
-											bleedae = ae;
-											_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
+					if (!partFound) {
+						a->SetActorValue(*lasthitpart, 7);
+					}
+					else {
+						_MESSAGE("Node : %s is %s (partType %d)", parent->name.c_str(), EFDBodyPartsName[partFound].c_str(), partType);
+						//물리데미지 탄에 대해서만 출혈 적용
+						if (this->damage > 0 && !this->IsBeamProjectile()) {
+							_MESSAGE("Physical projectile with base damage %f", this->damage);
+							//출혈이 이미 진행중인 경우 데미지를 증가시켜야 하니 마법 효과 리스트를 가져옴
+							ActiveEffectList* aeList = a->GetActiveEffectList();
+							if (aeList) {
+								//파츠별 출혈 데이터를 기반으로 확률 계산
+								BleedingData& bld = bleedingConfigs.at((EFDBodyParts)partFound);
+								_MESSAGE("Bleeding condition start %f current %f", bld.conditionStart, a->GetActorValue(**EFDConditions[partFound]));
+								if (bld.conditionStart >= a->GetActorValue(**EFDConditions[partFound])) {
+									float bleedChance = bld.chanceMin
+										+ (bld.chanceMax - bld.chanceMin) * (bld.conditionStart - max(bld.conditionThreshold, a->GetActorValue(**EFDConditions[partFound]))) / (bld.conditionStart - bld.conditionThreshold);
+									std::mt19937 e{ rd() };
+									std::uniform_real_distribution<float> dist{ 0, 100 };
+									float result = dist(e);
+									_MESSAGE("Bleeding Chance %f result %f", bleedChance, result);
+									if (result && result <= bleedChance) {
+										//마법 효과 리스트에서 출혈 효과를 찾아보고 출혈 효과가 있으면 강도 증가 + 갱신, 없으면 새로운 출혈 효과 적용
+										ActiveEffect* bleedae = nullptr;
+										for (auto it = aeList->data.begin(); it != aeList->data.end(); ++it) {
+											ActiveEffect* ae = it->get();
+											if (ae && !(ae->flags & ActiveEffect::kFlag_Inactive) && ae->item == bld.spell) {
+												bleedae = ae;
+												_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
+											}
 										}
-									}
-									float bleedmag = this->damage * bld.multiplier;
-									if (bleedae) {
-										bleedae->magnitude -= bleedmag;
-										bleedae->elapsed = 0;
-										_MESSAGE("Current bleeding magnitude %f", bleedae->magnitude * -1.0f);
-									}
-									else {
-										bld.spell->listOfEffects[0]->data.magnitude = bld.initialDamage + bleedmag;
-										bld.spell->listOfEffects[1]->data.magnitude = bld.initialDamage + bleedmag;
-										bld.spell->Cast(a, a);
-										_MESSAGE("Bleeding start magnitude %f", bld.initialDamage + bleedmag);
+										float bleedmag = this->damage * bld.multiplier;
+										if (bleedae) {
+											bleedae->magnitude -= bleedmag;
+											bleedae->elapsed = 0;
+											_MESSAGE("Current bleeding magnitude %f", bleedae->magnitude * -1.0f);
+										}
+										else {
+											bld.spell->listOfEffects[0]->data.magnitude = bld.initialDamage + bleedmag;
+											bld.spell->listOfEffects[1]->data.magnitude = bld.initialDamage + bleedmag;
+											bld.spell->Cast(a, a);
+											_MESSAGE("Bleeding start magnitude %f", bld.initialDamage + bleedmag);
+										}
 									}
 								}
 							}
-						}
-						else {
-							_MESSAGE("ActiveEffectList not found. Bleeding can't be processed");
-						}
-						//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
-						if (partFound <= 2) {
-							CartridgeData& gcd = cartridgeData.at(std::string("Global"));
-							for (int j = 0; j < maxTier; ++j) {
-								gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.25f + gd.formulaD, 100), 0);
+							else {
+								_MESSAGE("ActiveEffectList not found. Bleeding can't be processed");
 							}
-						}
-						//방어력 감소 효과 및 즉사 효과 발동
-						if (this->shooter.get()) {
-							EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
-							_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
-							EFDDeathMarkGlobal->Cast(this->shooter.get().get(), a);
+							//머리나 몸통에 맞은 경우에만 즉사 확률 업데이트
+							if (partFound <= 2) {
+								CartridgeData& gcd = cartridgeData.at(std::string("Global"));
+								for (int j = 0; j < maxTier; ++j) {
+									gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.25f + gd.formulaD, 100), 0);
+								}
+							}
+							//방어력 감소 효과 및 즉사 효과 발동
+							if (this->shooter.get()) {
+								EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
+								_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
+								EFDDeathMarkGlobal->Cast(this->shooter.get().get(), a);
+							}
 						}
 					}
 				}
