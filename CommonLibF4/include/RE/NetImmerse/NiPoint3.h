@@ -28,6 +28,14 @@ namespace RE
 		value_type x{ 0.0F };  // 0
 		value_type y{ 0.0F };  // 4
 		value_type z{ 0.0F };  // 8
+
+		NiPoint3 operator+ (const NiPoint3& pt) const {
+			return NiPoint3(x + pt.x, y + pt.y, z + pt.z);
+		}
+
+		NiPoint3 operator- (const NiPoint3& pt) const {
+			return NiPoint3(x - pt.x, y - pt.y, z - pt.z);
+		}
 	};
 	static_assert(sizeof(NiPoint3) == 0xC);
 
