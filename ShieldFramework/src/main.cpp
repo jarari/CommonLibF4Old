@@ -56,10 +56,25 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 	return olddata;
 }
 
+struct ShieldCollisionBound {
+	std::string boneOrigin;
+	hkVector4f pos;
+	hkVector4f rot;
+	hkVector4f halfExtent;
+	ShieldCollisionBound() {};
+	ShieldCollisionBound(std::string orig, hkVector4f p, hkVector4f r, hkVector4f he) {
+		boneOrigin = orig;
+		pos = p;
+		rot = r;
+		halfExtent = he;
+	}
+};
+
 struct ShieldData {
 	BGSMaterialType* material = nullptr;
 	SpellItem* spell = nullptr;
 	float damageThreshold = 0.0f;
+	ShieldCollisionBound bounds;
 };
 
 using std::unordered_map;
@@ -69,28 +84,9 @@ REL::Relocation<uintptr_t> ProcessProjectileFX{ REL::ID(806412), ProcessProjecti
 static unordered_map<Actor*, BGSMaterialType*> originalMaterialMap;
 static unordered_map<uint32_t, vector<std::string>> shieldPartsMap;
 static unordered_map<uint32_t, vector<ShieldData>> shieldDataMap;
-static unordered_map<TESObjectREFR*, bhkNPCollisionObject*> shieldCollisionObjects;
+static vector<uint32_t> shieldIDs;
 static ActorValueInfo* damageThresholdAdd;
 static ActorValueInfo* damageThresholdMul;
-
-//POSTPONED:Is it possible to check if the actor/collision object still exists?
-
-/*struct EquipManagerEvent {
-};
-
-class EquipEventSink : public BSTEventSink<EquipManagerEvent> {
-	virtual BSEventNotifyControl ProcessEvent(const EquipManagerEvent& a_event, BSTEventSource<EquipManagerEvent>* a_source) override {
-		Dump((void*)&a_event, 512);
-		//TODO:If the actor equips an item, look for the shield keyword
-		//TODO:Search for a NiNode named ShieldFramework and store the shield's collision object in the map.
-		//TODO:If the actor unequips an item and it's a shield, then remove the collision object from the map.
-
-		return BSEventNotifyControl::kContinue;
-	}
-	EquipEventSink() {};
-	virtual ~EquipEventSink() {};
-	F4_HEAP_REDEFINE_NEW(EquipEventSink);
-};*/
 
 //Rough dumps
 struct _TESHitEvent {
@@ -150,36 +146,33 @@ public:
 class HitEventSink : public BSTEventSink<_TESHitEvent> {
 public:
 	virtual BSEventNotifyControl ProcessEvent(const _TESHitEvent& a_event, BSTEventSource<_TESHitEvent>* a_source) override {
-		/*if ((a_event.unk_1C == 0 || a_event.unk_2C == 0) && a_event.weapon && a_event.weaponInstance) {
+		if ((a_event.unk_1C == 0 || a_event.unk_2C == 0) && a_event.weapon && a_event.weaponInstance) {
 			if (a_event.victim && a_event.victim->formType == ENUM_FORM_ID::kACHR) {
-				Actor* a = (Actor*)a_event.victim;
-				//Detect melee hits and swap material for a while.
-				//I don't think it works though, since the sound effect plays before the hit event happens.
-				if (a_event.attackData && a_event.colObj) {
-					NiAVObject* parent = a_event.colObj->sceneObject;
-					if (parent && strcmp(parent->name.c_str(), "ShieldFramework_Metal") == 0) {
-						originalMaterialMap.insert(std::pair<Actor*, BGSMaterialType*>(a, a->race->bloodImpactMaterial));
-						a->race->bloodImpactMaterial = shieldMaterialMetal;
-					}
-					else if (parent && strcmp(parent->name.c_str(), "ShieldFramework_Glass") == 0) {
-						originalMaterialMap.insert(std::pair<Actor*, BGSMaterialType*>(a, a->race->bloodImpactMaterial));
-						a->race->bloodImpactMaterial = shieldMaterialGlass;
-					}
-				}
-				else {
-					auto lookup = originalMaterialMap.find(a);
-					if (lookup != originalMaterialMap.end()) {
-						a->race->bloodImpactMaterial = lookup->second;
-					}
-				}
+				//Actor* a = (Actor*)a_event.victim;
+				return BSEventNotifyControl::kStop;
 			}
-		}*/
+		}
 		return BSEventNotifyControl::kContinue;
 	}
 	HitEventSink() {};
 	virtual ~HitEventSink() {};
 	F4_HEAP_REDEFINE_NEW(HitEventSink);
 };
+
+struct RayCastResult {
+	bool hit;
+	hkVector4f pos;
+	RayCastResult(bool h, hkVector4f p) {
+		hit = h;
+		pos = p;
+	}
+};
+
+RayCastResult RayCastShield(hkVector4f worldOrigin, hkVector4f direction, NiNode* bone, hkVector4f pos, hkVector4f rot, hkVector4f halfExtent) {
+	if (!bone) return RayCastResult(false, hkVector4f());
+	//TODO:Implement this using https://gdbooks.gitbooks.io/3dcollisions/content/Chapter3/raycast_aabb.html
+	return RayCastResult(false, hkVector4f());
+}
 
 //This will intercept ProcessImpacts() function in Projectile's vtable and check if the collidee is holding a shield.
 class ProjectileHooks : public Projectile {
@@ -188,52 +181,49 @@ public:
 
 	bool CheckShield() {
 		for (auto it = this->impacts.begin(); it != this->impacts.end(); ++it) {
-			if (!it->processed) {
-				if (it->collidee.get() && it->collidee.get()->GetFormType() == ENUM_FORM_ID::kACHR) {
-					Actor* a = (Actor*)it->collidee.get().get();
-					if (a && a->currentProcess) {
-						BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
-						uint32_t weapid = 0;
-						for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
-							if (eqit->equipIndex.index == 0 && eqit->item.instanceData.get()) {
-								weapid = eqit->item.object->formID;
-								break;
-							}
-						}
-						if (weapid) {
-							if (it->colObj.get()) {
-								auto partslookup = shieldPartsMap.find(weapid);
-								if (partslookup != shieldPartsMap.end()) {
-									vector<std::string> parts = partslookup->second;
-									auto datalookup = shieldDataMap.find(weapid);
-									vector<ShieldData> shielddata = datalookup->second;
+			if (it->processed || !it->collidee.get() || it->collidee.get()->GetFormType() != ENUM_FORM_ID::kACHR)
+				continue;
 
-									NiAVObject* parent = it->colObj.get()->sceneObject;
-									if (parent) {
-										for (int i = 0; i < parts.size(); ++i) {
-											if (parent->name == parts[i]) {
-												if (shielddata[i].material) {
-													it->materialType = shielddata[i].material;
-												}
-												if (shielddata[i].spell) {
-													shielddata[i].spell->Cast(this->shooter.get().get(), a);
-												}
-												float dtAdd = a->GetActorValue(*damageThresholdAdd);
-												float dtMul = a->GetActorValue(*damageThresholdMul);
-												if (shielddata[i].damageThreshold <= 0 || this->damage < (shielddata[i].damageThreshold + dtAdd) * dtMul) {
-													this->damage = 0.0f;
-													if (this->IsBeamProjectile()) {
-														((BeamProjectile*)this)->dealtDamage = 0.0f;
-													}
-												}
-											}
+			Actor* a = (Actor*)it->collidee.get().get();
+			if (!a || !a->currentProcess || !a->Get3D())
+				continue;
+
+			BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
+			for (auto eqit = equipped.begin(); eqit != equipped.end(); ++eqit) {
+				for (int i = 0; i < shieldIDs.size(); ++i) {
+					uint32_t eqipid = eqit->item.object->formID;
+					logger::warn(_MESSAGE("equipment formid %llx", eqipid));
+					if (shieldIDs[i] == eqit->item.object->formID) {
+						auto partslookup = shieldPartsMap.find(eqipid);
+						if (partslookup != shieldPartsMap.end()) {
+							vector<std::string> parts = partslookup->second;
+							auto datalookup = shieldDataMap.find(eqipid);
+							vector<ShieldData> sd = datalookup->second;
+
+							for (int j = 0; j < parts.size(); ++j) {
+								NiAVObject* bone = a->Get3D()->GetObjectByName(BSFixedString(sd[j].bounds.boneOrigin));
+								if (bone) {
+									hkVector4f projOrigin = hkVector4f(it->location) - hkVector4f(this->movementDirection) * this->distanceMoved;
+									RayCastResult result = RayCastShield(projOrigin, this->movementDirection, bone->IsNode(), sd[j].bounds.pos, sd[j].bounds.rot, sd[j].bounds.halfExtent);
+									if (result.hit) {
+										it->location = result.pos;
+										if (sd[j].material) {
+											it->materialType = sd[j].material;
+										}
+										if (sd[j].spell) {
+											sd[j].spell->Cast(this->shooter.get().get(), a);
+										}
+										float dtAdd = a->GetActorValue(*damageThresholdAdd);
+										float dtMul = a->GetActorValue(*damageThresholdMul);
+										if (sd[j].damageThreshold <= 0
+											|| this->damage < (sd[j].damageThreshold + dtAdd) * dtMul) {
+											this->damage = 0.0f;
 										}
 									}
 								}
 							}
 						}
 					}
-					//}
 				}
 			}
 		}
@@ -347,6 +337,8 @@ void InitializeShieldData() {
 				for (auto formit = (*modit).begin(); formit != (*modit).end(); ++formit) {
 					TESForm* shieldForm = GetFormFromMod(modit.key(), std::stoi(formit.key(), 0, 16));
 					uint32_t formid = shieldForm->formID;
+					shieldIDs.push_back(formid);
+					logger::warn(_MESSAGE("Shield FormID %llx", formid));
 					if (shieldPartsMap.find(formid) == shieldPartsMap.end()) {
 						vector<std::string> parts;
 						vector<ShieldData> shielddata;
@@ -356,18 +348,49 @@ void InitializeShieldData() {
 							ShieldData sd;
 							auto lookup = (*partit).find("MaterialType");
 							if (lookup != (*partit).end()) {
-								sd.material = GetMaterialTypeByName(lookup.value().get<std::string>());
+								BGSMaterialType* result = GetMaterialTypeByName(lookup.value().get<std::string>());
+								if (result) {
+									sd.material = result;
+									logger::warn(_MESSAGE("MaterialType %s found at %llx", lookup.value().get<std::string>().c_str(), result));
+								}
+								else {
+									logger::warn(_MESSAGE("MaterialType %s not found", lookup.value().get<std::string>().c_str()));
+								}
 							}
 							lookup = (*partit).find("Spell");
 							if (lookup != (*partit).end()) {
 								std::string spellName = lookup.value().get<std::string>();
 								if (spellName.length() > 0) {
-									sd.spell = GetSpellByFullName(spellName);
+									SpellItem* result = GetSpellByFullName(spellName);
+									if (result) {
+										sd.spell = result;
+										logger::warn(_MESSAGE("Spell %s found at %llx", lookup.value().get<std::string>().c_str(), result));
+									}
+									else {
+										logger::warn(_MESSAGE("Spell %s not found", lookup.value().get<std::string>().c_str()));
+									}
 								}
 							}
 							lookup = (*partit).find("DamageThreshold");
 							if (lookup != (*partit).end()) {
 								sd.damageThreshold = lookup.value().get<float>();
+								logger::warn(_MESSAGE("DamageThreshold set to %f", sd.damageThreshold));
+							}
+							lookup = (*partit).find("CollisionBound");
+							if (lookup != (*partit).end()) {
+								std::string bone = lookup.value()["Bone"].get<std::string>();
+								float posX = lookup.value()["PosX"].get<float>();
+								float posY = lookup.value()["PosY"].get<float>();
+								float posZ = lookup.value()["PosZ"].get<float>();
+								float rotX = lookup.value()["RotX"].get<float>();
+								float rotY = lookup.value()["RotY"].get<float>();
+								float rotZ = lookup.value()["RotZ"].get<float>();
+								float heX = lookup.value()["HalfExtentX"].get<float>();
+								float heY = lookup.value()["HalfExtentY"].get<float>();
+								float heZ = lookup.value()["HalfExtentZ"].get<float>();
+								sd.bounds = ShieldCollisionBound(bone, hkVector4f(posX, posY, posZ), hkVector4f(rotX, rotY, rotZ), hkVector4f(heX, heY, heZ));
+								logger::warn(_MESSAGE("CollisionBound Bone %s\nPos\tX %f\tY %f\tZ %f\nRot\tX %f\tY %f\tZ %f\nHalfExtent\tX %f\tY %f\tZ %f"
+													  , bone.c_str(), posX, posY, posZ, rotX, rotY, rotZ, heX, heY, heZ));
 							}
 							shielddata.push_back(sd);
 						}
@@ -397,7 +420,6 @@ void InitializeImpactData() {
 	BGSImpactDataSet* bullet_incendiary = (BGSImpactDataSet*)TESForm::GetFormByID(0x1B5EE6);
 	BGSImpactDataSet* bullet_cryo = (BGSImpactDataSet*)TESForm::GetFormByID(0x06F11F);
 	BGSImpactDataSet* flamethrower = (BGSImpactDataSet*)TESForm::GetFormByID(0x0D76F5);
-	logger::warn(_MESSAGE("Bullet Impact Data Set %llx", bullet_normal));
 	for (auto& it : fs::directory_iterator(jsonEntry)) {
 		if (it.path().extension().compare(".json") == 0) {
 			stream << it.path().filename();
@@ -426,6 +448,9 @@ void InitializeImpactData() {
 						if (mat && ipct) {
 							bullet_normal->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
 						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
+						}
 					}
 				}
 				else if (typeit.key() == "Heavy") {
@@ -444,6 +469,9 @@ void InitializeImpactData() {
 																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
 						if (mat && ipct) {
 							bullet_heavy->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
 						}
 					}
 				}
@@ -464,6 +492,9 @@ void InitializeImpactData() {
 						if (mat && ipct) {
 							bullet_explosive->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
 						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
+						}
 					}
 				}
 				else if (typeit.key() == "NoParallax") {
@@ -482,6 +513,9 @@ void InitializeImpactData() {
 																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
 						if (mat && ipct) {
 							bullet_noparallax->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
 						}
 					}
 				}
@@ -502,6 +536,9 @@ void InitializeImpactData() {
 						if (mat && ipct) {
 							bullet_incendiary->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
 						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
+						}
 					}
 				}
 				else if (typeit.key() == "Cryo") {
@@ -521,6 +558,9 @@ void InitializeImpactData() {
 						if (mat && ipct) {
 							bullet_cryo->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
 						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
+						}
 					}
 				}
 				else if (typeit.key() == "FlameThrower") {
@@ -539,6 +579,9 @@ void InitializeImpactData() {
 																			 std::stoi((*ipctlookup.value().find("FormID")).get<std::string>(), 0, 16));
 						if (mat && ipct) {
 							flamethrower->impactMap.insert(BSTTuple<BGSMaterialType*, BGSImpactData*>(mat, ipct));
+						}
+						else {
+							logger::error(_MESSAGE("Impact data for %s type failed! Mat : %s, ImpactData %llx", matname.c_str(), ipct));
 						}
 					}
 				}
@@ -590,9 +633,9 @@ void InitializeFramework() {
 	REL::safe_write(ProcessProjectileFX.address(), (uint8_t)0xEB);
 
 	damageThresholdAdd = GetAVIFByEditorID(std::string("ShieldDTAdd"));
-	logger::warn(_MESSAGE("ShieldDTAdd %llx", damageThresholdAdd));
 	damageThresholdMul = GetAVIFByEditorID(std::string("ShieldDTMul"));
-	logger::warn(_MESSAGE("ShieldDTMul %llx", damageThresholdMul));
+
+	logger::warn(_MESSAGE("PlayerCharacter %llx", PlayerCharacter::GetSingleton()));
 }
 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
@@ -650,10 +693,10 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 			InitializeImpactData();
 			InitializeFramework();
 
-			/*HitEventSource* src = HitEventSource::GetSingleton();
+			HitEventSource* src = HitEventSource::GetSingleton();
 			logger::warn(_MESSAGE("HitEventSource %llx", src));
 			HitEventSink* sink = new HitEventSink();
-			src->RegisterSink(sink);*/
+			src->RegisterSink(sink);
 
 		}
 	});
