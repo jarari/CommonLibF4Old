@@ -205,30 +205,3 @@ if (COPY_BUILD)
 		)
 	endif ()
 endif ()
-
-# ---- Build artifacts ----
-
-set(SCRIPT "scripts/archive_artifacts.py")
-
-add_custom_target(
-	create_artifact
-	COMMAND
-		"${CMAKE_CURRENT_SOURCE_DIR}/${SCRIPT}"
-		"--name=\"${PROJECT_NAME}\""
-		"--dll=\"$<TARGET_FILE:${PROJECT_NAME}>\""
-		"--pdb=\"$<TARGET_PDB_FILE:${PROJECT_NAME}>\""
-	WORKING_DIRECTORY
-		${CMAKE_CURRENT_BINARY_DIR}
-	SOURCES
-		${SCRIPT}
-)
-
-add_dependencies(
-	create_artifact
-	${PROJECT_NAME}
-)
-
-source_group(
-	TREE ${CMAKE_CURRENT_SOURCE_DIR}
-	FILES ${SCRIPT}
-)
