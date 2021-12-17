@@ -1,0 +1,14 @@
+{
+  "name": "DoomFist",
+  "version-string": "1.0.0",
+  "description": "DoomFist plugin created using CommonLibF4",
+  "homepage": "https://github.com/jarari/CommonLibF4/DoomFist",
+  "license": "MIT",
+  "dependencies": [
+    "boost-iostreams",
+    "boost-iterator",
+    "boost-predef",
+    "boost-stl-interfaces",
+    "spdlog"
+  ]
+}
