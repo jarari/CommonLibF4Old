@@ -157,6 +157,9 @@ namespace RE
 		static_assert(sizeof(Data) == 0x28);
 
 		bool Cast(TESObjectREFR* caster, TESObjectREFR* target, uint64_t unk = 0) {
+			if (!caster->parentCell || !target->parentCell) {
+				return false;
+			}
 			using func_t = decltype(&SpellItem::Cast);
 			REL::Relocation<func_t> func{ REL::ID(1511987) };
 			return func(this, caster, target, unk);
