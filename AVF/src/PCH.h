@@ -5,16 +5,16 @@
 #include "RE/Fallout.h"
 
 #ifdef NDEBUG
-#include <spdlog/sinks/basic_file_sink.h>
+#	include <spdlog/sinks/basic_file_sink.h>
 #else
-#include <spdlog/sinks/msvc_sink.h>
+#	include <spdlog/sinks/msvc_sink.h>
 #endif
 #pragma warning(pop)
-#pragma warning(disable:4100);
 
 #define DLLEXPORT __declspec(dllexport)
 
 namespace logger = F4SE::log;
 
 using namespace std::literals;
-using namespace RE;
+
+#include "Version.h"

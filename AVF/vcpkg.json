@@ -1,8 +1,8 @@
 {
-  "name": "DoomFist",
+  "name": "exampleproject",
   "version-string": "1.0.0",
-  "description": "DoomFist plugin created using CommonLibF4",
-  "homepage": "https://github.com/jarari/CommonLibF4/DoomFist",
+  "description": "An example project built using CommonLibF4",
+  "homepage": "https://github.com/Ryan-rsm-McKenzie/CommonLibF4",
   "license": "MIT",
   "dependencies": [
     "boost-iostreams",
