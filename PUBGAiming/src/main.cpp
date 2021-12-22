@@ -124,7 +124,7 @@ void SightExit(bool switchCam = true) {
 }
 
 using std::unordered_map;
-class AnimationGraphEventWatcher : public BSTEventSink<BSAnimationGraphEvent> {
+class AnimationGraphEventWatcher {
 public:
 	typedef BSEventNotifyControl (AnimationGraphEventWatcher::* FnProcessEvent)(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* dispatcher);
 
@@ -303,7 +303,7 @@ void InitializePlugin() {
 	((InputEventReceiverOverride*)((uint64_t)pcam + 0x38))->HookSink();
 	_MESSAGE("PlayerCharacter %llx", p);
 	_MESSAGE("PlayerCamera %llx", pcam);
-	for (auto it = INISettingCollection::GetSingleton()->settings.begin(); it != INIPrefSettingCollection::GetSingleton()->settings.end(); ++it) {
+	for (auto it = INISettingCollection::GetSingleton()->settings.begin(); it != INISettingCollection::GetSingleton()->settings.end(); ++it) {
 		if (strcmp((*it)->_key, "f3rdPersonAimFOV:Camera") == 0) {
 			TPAimFOV = *it;
 			_MESSAGE("Setting %s", (*it)->_key);
