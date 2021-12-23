@@ -80,6 +80,11 @@ endif ()
 
 find_package(spdlog REQUIRED CONFIG)
 
+#find_library(HAVOK_BASE NAME hkBase HINTS ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+#find_library(HAVOK_COMPAT NAME hkCompat HINTS ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+#find_library(HAVOK_PHYSICS NAME hknpPhysics HINTS ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+#find_library(HAVOK_SERIALIZE NAME hkSerialize HINTS ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+
 # ---- Add source files ----
 
 include(cmake/sourcelist.cmake)
@@ -94,11 +99,41 @@ source_group(
 	FILES ${CMAKE_CURRENT_BINARY_DIR}/include/Version.h
 )
 
+set(
+	HAVOK_PATH
+	"D:/Games/Tullius Mod Pack  V 3.4.6.4/Workspace/F4SE Stuff/Havok Reference/From Nebula/Source/"
+)
+
+#file(GLOB_RECURSE HAVOK
+#         ${HAVOK_PATH}/*
+#)
+
+#foreach(source IN LISTS HAVOK)
+#    get_filename_component(source_path "${source}" PATH)
+#    string(REPLACE ${HAVOK_PATH} "" source_path_rel "${source_path}")
+#    string(REPLACE "/" "\\" source_path_msvc "${source_path_rel}")
+#    source_group("${source_path_msvc}" FILES "${source}")
+#	message("${source_path_msvc}")
+#	message("${source_path_rel}")
+#endforeach()
+
+#file(GLOB_RECURSE HAVOK
+#         ${CMAKE_CURRENT_SOURCE_DIR}/src/Havok/*
+#)
+
+#foreach(source IN LISTS HAVOK)
+#    get_filename_component(source_path "${source}" PATH)
+#    string(REPLACE ${CMAKE_CURRENT_SOURCE_DIR}/src/Havok/ "" source_path_rel "${source_path}")
+#    string(REPLACE "/" "\\" source_path_msvc "${source_path_rel}")
+#    source_group("${source_path_msvc}" FILES "${source}")
+#endforeach()
+
 # ---- Create DLL ----
 
 add_library(
 	${PROJECT_NAME}
 	SHARED
+#	${HAVOK}
 	${SOURCES}
 	${CMAKE_CURRENT_BINARY_DIR}/version.rc
 	.clang-format
@@ -116,11 +151,14 @@ target_compile_features(
 		cxx_std_20
 )
 
+#include_directories(${HAVOK_PATH})
+
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
 		${CMAKE_CURRENT_BINARY_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/src
+#		${CMAKE_CURRENT_SOURCE_DIR}/src/Havok
 )
 
 target_link_libraries(
@@ -128,6 +166,10 @@ target_link_libraries(
 	PRIVATE
 		CommonLibF4::CommonLibF4
 		spdlog::spdlog
+#		${HAVOK_BASE}
+#		${HAVOK_COMPAT}
+#		${HAVOK_PHYSICS}
+#		${HAVOK_SERIALIZE}
 )
 
 target_precompile_headers(
