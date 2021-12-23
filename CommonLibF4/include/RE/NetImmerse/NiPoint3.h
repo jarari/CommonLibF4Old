@@ -36,6 +36,10 @@ namespace RE
 		NiPoint3 operator- (const NiPoint3& pt) const {
 			return NiPoint3(x - pt.x, y - pt.y, z - pt.z);
 		}
+
+		NiPoint3 operator* (float s) const {
+			return NiPoint3(x * s, y * s, z * s);
+		}
 	};
 	static_assert(sizeof(NiPoint3) == 0xC);
 
