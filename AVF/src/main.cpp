@@ -245,6 +245,10 @@ extern "C" DLLEXPORT void F4SEAPI SetVelocity(std::monostate, Actor * a, float x
 	mapLock.unlock();
 }
 
+bool IsOnGroundPapyrus(std::monostate, Actor* a) {
+	return IsOnGround(a);
+}
+
 void VelocityMapCleanup() {
 	mapLock.lock();
 	velMap.clear();
@@ -257,6 +261,7 @@ bool RegisterFuncs(BSScript::IVirtualMachine* a_vm) {
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorUp", GetActorUp, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorEye", GetActorEye, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "SetVelocity", SetVelocity, true);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "IsOnGround", IsOnGroundPapyrus, false);
 	return true;
 }
 
