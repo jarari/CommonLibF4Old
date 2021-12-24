@@ -224,6 +224,8 @@ float rotLimitX = 10.0f;
 float rotLimitY = 5.0f;
 float rotDivX = 10.0f;
 float rotDivY = 20.0f;
+float rotDivXPad = 4.0f;
+float rotDivYPad = 8.0f;
 float rotADSConditionMult = 5.0f;
 float rotReturnDiv = 1.5f;
 float rotReturnStep = 0.1f;
@@ -422,19 +424,21 @@ public:
 		PlayerInputHandler(a_data) {
 	};
 
-	void CalculateXY(float x, float y) {
+	void CalculateXY(float x, float y, float divX, float divY) {
 		if (UI::GetSingleton()->menuMode || UI::GetSingleton()->GetMenuOpen("CursorMenu"))
 			return;
-		rotX = max(min(rotX + x / rotDivX, rotLimitX), -rotLimitX);
-		rotY = max(min(rotY + y / rotDivY, rotLimitY), -rotLimitY);
+		rotX = max(min(rotX + x / divX, rotLimitX), -rotLimitX);
+		rotY = max(min(rotY + y / divY, rotLimitY), -rotLimitY);
 	}
 
 	virtual void OnMouseMoveEvent(const MouseMoveEvent* evn) {
-		CalculateXY((float)evn->mouseInputX, (float)evn->mouseInputY);
+		CalculateXY((float)evn->mouseInputX, (float)evn->mouseInputY, rotDivX, rotDivY);
 	}
 
 	virtual void OnThumbstickEvent(const ThumbstickEvent* evn) {
-		CalculateXY(evn->xValue, evn->yValue);
+		if (evn->idCode == ThumbstickEvent::kRight) {
+			CalculateXY(evn->xValue, -evn->yValue, rotDivXPad, rotDivYPad);
+		}
 	}
 };
 
@@ -462,10 +466,10 @@ public:
 	}
 
 	void HookedThumbstickEvent(ThumbstickEvent* evn) {
-		if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
-			std::vector<float> rotated = RotateXY(evn->xValue, evn->yValue, -rotZ * toRad);
+		if (evn->idCode == ThumbstickEvent::kRight && pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
+			std::vector<float> rotated = RotateXY(evn->xValue, -evn->yValue, -rotZ * toRad);
 			evn->xValue = rotated[0];
-			evn->yValue = rotated[1];
+			evn->yValue = -rotated[1];
 		}
 		(this->*thumbstickEvn)(evn);
 	}
@@ -505,20 +509,20 @@ public:
 			if (IsInADS(a)) {
 				conditionalMultiplier *= rotADSConditionMult;
 			}
-			float deltaTime = min(*ptr_engineTime - lastRun, 1.0f);
+			float deltaTime = min(*ptr_engineTime - lastRun, 5.0f);
 			float timeMult = deltaTime * 60.0f;
-			float step = rotReturnStep * conditionalMultiplier * timeMult;
-			rotX /= max(pow(rotReturnDiv * conditionalMultiplier, timeMult), rotReturnDivMin);
-			rotY /= max(pow(rotReturnDiv * conditionalMultiplier, timeMult), rotReturnDivMin);
-			if (abs(rotX) * (abs(rotX) - step) <= 0) {
-				rotX = 0;
-			}
-			if (abs(rotY) * (abs(rotY) - step) <= 0) {
-				rotY = 0;
-			}
 
 			if (leanADSOnly && !IsInADS(a)) {
 				leanState = 0;
+			}
+
+			if (leanState != 0) {
+				UI* ui = UI::GetSingleton();
+				if (ui->GetMenuOpen("WorkshopMenu")
+					|| ui->GetMenuOpen("DialogueMenu")
+					|| p->interactingState != INTERACTING_STATE::kNotInteracting) {
+					leanState = 0;
+				}
 			}
 
 			if (leanState == 1) {
@@ -528,7 +532,7 @@ public:
 				leanTime = max(leanTime - deltaTime, -leanTimeCost);
 			}
 			else {
-				if (abs(leanTime) < deltaTime) {
+				if (abs(leanTime) <= deltaTime) {
 					leanTime = 0;
 				}
 				else {
@@ -545,36 +549,38 @@ public:
 			/*hkVector4f rayOrigin = hkVector4f(node->world.translate.x, node->world.translate.y, node->world.translate.z + 60.0f * scale);
 			hkVector4f rayDir = right;*/
 
-			if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]) {
-				float rayDist = 70.0f * abs(sin(leanMax3rd * toRad));
-				//CastRay(a, rayOrigin, rayDir, rayDist);
-				rotZ = leanMax3rd * leanWeight;
-				transZ = leanMax3rd * leanWeight / 3.0f;
-				float rotXRadByThree = rotX * toRad / 3.0f;
-				float rotYRadByTwo = rotY * toRad / 2.0f;
-				float rotZRadByThree = rotZ * toRad / 3.0f;
-				float transZRad = transZ * toRad;
-				float transZByTwo = transZ / 2.0f;
-				NiNode* chestInserted = (NiNode*)node->GetObjectByName("ChestInserted");
+			//float rayDist = 70.0f * abs(sin(leanMax3rd * toRad));
+			//CastRay(a, rayOrigin, rayDir, rayDist);
+			rotZ = leanMax3rd * leanWeight;
+			transZ = leanMax3rd * leanWeight / 3.0f;
+			float rotXRadByThree = rotX * toRad / 3.0f;
+			float rotYRadByTwo = rotY * toRad / 2.0f;
+			float rotZRadByThree = rotZ * toRad / 3.0f;
+			float transZRad = transZ * toRad;
+			float transZByTwo = transZ / 2.0f;
+
+			NiAVObject* tpNode = p->Get3D(false);
+			if (tpNode) {
+				NiNode* chestInserted = (NiNode*)tpNode->GetObjectByName("ChestInserted");
 				if (chestInserted) {
 					NiMatrix3 rot = GetRotationMatrix33(0, rotYRadByTwo, -rotXRadByThree) * chestInserted->parent->world.rotate * GetRotationMatrix33(heading, rotZRadByThree) * Inverse(chestInserted->parent->world.rotate);
 					chestInserted->local.rotate = rot;
 				}
 
-				NiNode* spine2Inserted = (NiNode*)node->GetObjectByName("Spine2Inserted");
+				NiNode* spine2Inserted = (NiNode*)tpNode->GetObjectByName("Spine2Inserted");
 				if (spine2Inserted) {
 					spine2Inserted->local.rotate = GetRotationMatrix33(0, rotYRadByTwo, -rotXRadByThree) * spine2Inserted->parent->world.rotate * GetRotationMatrix33(heading, rotZRadByThree) * Inverse(spine2Inserted->parent->world.rotate);
 					//_MESSAGE("spine1Inserted");
 				}
 
-				NiNode* spine1Inserted = (NiNode*)node->GetObjectByName("Spine1Inserted");
+				NiNode* spine1Inserted = (NiNode*)tpNode->GetObjectByName("Spine1Inserted");
 				if (spine1Inserted) {
 					spine1Inserted->local.rotate = GetRotationMatrix33(0, 0, -rotXRadByThree) * spine1Inserted->parent->world.rotate * GetRotationMatrix33(heading, rotZRadByThree) * Inverse(spine1Inserted->parent->world.rotate);
 					spine1Inserted->local.translate.z = transZ;
 					//_MESSAGE("spine1Inserted");
 				}
 
-				NiNode* pelvisInserted = (NiNode*)node->GetObjectByName("PelvisInserted");
+				NiNode* pelvisInserted = (NiNode*)tpNode->GetObjectByName("PelvisInserted");
 				if (pelvisInserted) {
 					NiMatrix3 rot = GetRotationMatrix33(rotZRadByThree, 0, 0);
 					pelvisInserted->local.rotate = rot;
@@ -582,7 +588,7 @@ public:
 					//_MESSAGE("pelvisInserted");
 				}
 
-				NiNode* llegCalfInserted = (NiNode*)node->GetObjectByName("LLeg_CalfInserted");
+				NiNode* llegCalfInserted = (NiNode*)tpNode->GetObjectByName("LLeg_CalfInserted");
 				if (llegCalfInserted) {
 					NiMatrix3 rot = GetRotationMatrix33(-rotZRadByThree, 0, 0);
 					llegCalfInserted->local.rotate = rot;
@@ -590,7 +596,7 @@ public:
 					//_MESSAGE("llegFootInserted");
 				}
 
-				NiNode* rlegCalfInserted = (NiNode*)node->GetObjectByName("RLeg_CalfInserted");
+				NiNode* rlegCalfInserted = (NiNode*)tpNode->GetObjectByName("RLeg_CalfInserted");
 				if (rlegCalfInserted) {
 					NiMatrix3 rot = GetRotationMatrix33(-rotZRadByThree, 0, 0);
 					rlegCalfInserted->local.rotate = rot;
@@ -600,7 +606,7 @@ public:
 			}
 
 			if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
-				float rayDist = 70.0f * abs(sin(leanMax * toRad));
+				//float rayDist = 70.0f * abs(sin(leanMax * toRad));
 				//CastRay(a, rayOrigin, rayDir, rayDist);
 				rotZ = leanMax * leanWeight;
 				transZ = leanMax * leanWeight / 3.0f;
@@ -644,7 +650,15 @@ public:
 				bbx->extents.z = squeezedHeight;
 			}*/
 
-			if (abs(rotX) * (abs(rotX) - step) > 0) {
+			float step = rotReturnStep * conditionalMultiplier * timeMult;
+			float retDiv = max(pow(rotReturnDiv * conditionalMultiplier, timeMult), rotReturnDivMin);
+			rotX /= retDiv;
+			rotY /= retDiv;
+			//_MESSAGE("retDiv %f rotX %f rotY %f", retDiv, rotX, rotY);
+			if (abs(rotX) * (abs(rotX) - step) <= 0) {
+				rotX = 0;
+			}
+			else {
 				if (rotX > 0) {
 					rotX -= step;
 				}
@@ -652,7 +666,10 @@ public:
 					rotX += step;
 				}
 			}
-			if (abs(rotY) * (abs(rotY) - step) > 0) {
+			if (abs(rotY) * (abs(rotY) - step) <= 0) {
+				rotY = 0;
+			}
+			else {
 				if (rotY > 0) {
 					rotY -= step;
 				}
@@ -838,9 +855,11 @@ void InitializePlugin() {
 void LoadConfigs() {
 	ini.LoadFile("Data\\F4SE\\Plugins\\UneducatedShooter.ini");
 	rotLimitX = std::stof(ini.GetValue("Inertia", "rotLimitX", "12.0"));
-	rotLimitY = std::stof(ini.GetValue("Inertia", "rotLimitY", "5.0"));
+	rotLimitY = std::stof(ini.GetValue("Inertia", "rotLimitY", "7.0"));
 	rotDivX = std::stof(ini.GetValue("Inertia", "rotDivX", "10.0"));
-	rotDivY = std::stof(ini.GetValue("Inertia", "rotDivY", "40.0"));
+	rotDivY = std::stof(ini.GetValue("Inertia", "rotDivY", "15.0"));
+	rotDivXPad = std::stof(ini.GetValue("Inertia", "rotDivXPad", "4.0"));
+	rotDivYPad = std::stof(ini.GetValue("Inertia", "rotDivYPad", "8.0"));
 	rotADSConditionMult = std::stof(ini.GetValue("Inertia", "rotADSConditionMult", "5.0"));
 	rotReturnDiv = std::stof(ini.GetValue("Inertia", "rotReturnDiv", "1.75"));
 	rotReturnDivMin = std::stof(ini.GetValue("Inertia", "rotReturnDivMin", "1.05"));
