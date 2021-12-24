@@ -68,12 +68,14 @@ bool IsInPowerArmor(Actor* a) {
 
 const static std::string UIName{ "BingleBodyPartsUI" };
 PlayerCharacter* p;
-std::vector<std::string> hideMenuList = { "BarterMenu", "ContainerMenu", "CookingMenu", "CreditsMenu", "DialogueMenu", "ExamineMenu",
-											"LockpickingMenu", "LooksMenu", "MessageBoxMenu", "PauseMenu", "PipboyMenu", "PromptMenu",
-											"SPECIALMenu", "TerminalHolotapeMenu", "TerminalMenu", "VATSMenu", "WorkshopMenu",
+std::vector<std::string> hideMenuList = { "BarterMenu", "ContainerMenu", "CookingMenu", "CreditsMenu", "DialogueMenu", "ExamineMenu", "LevelUpMenu",
+											"LockpickingMenu", "LooksMenu", "MessageBoxMenu", "PauseMenu", "PipboyMenu", "BookMenu",
+											"SPECIALMenu", "TerminalHolotapeMenu", "TerminalMenu", "VATSMenu", "WorkshopMenu", "SitWaitMenu", "SleepWaitMenu",
 											"F4QMWMenu" };
 int hideCount = 0;
 bool isInPA = false;
+bool isInteracting = false;
+bool isMenuOpen = false;
 IMenu* HUDMenu;
 ActorValueInfo* perceptionCondition;
 ActorValueInfo* enduranceCondition;
@@ -107,7 +109,6 @@ public:
 		instance->UpdateFlag(UI_MENU_FLAGS::kAllowSaving, true);
 		instance->UpdateFlag(UI_MENU_FLAGS::kDontHideCursorWhenTopmost, true);
 		instance->UpdateFlag(UI_MENU_FLAGS::kAlwaysOpen, true);
-		instance->UpdateFlag(UI_MENU_FLAGS::kRendersUnderPauseMenu, true);
 		instance->depthPriority = 5;
 		instance->inputEventHandlingEnabled = false;
 		BSScaleformManager* sfm = BSScaleformManager::GetSingleton();
@@ -125,15 +126,44 @@ public:
 	
 	virtual void PostDisplay() override {
 		if (*ptr_engineTime - lastUpdated >= 0.1f) {
-			for (int i = 0; i < 6; ++i) {
-				BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
-				float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
-				float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
-				float scale = (avperm + avdamage) / avperm;
-				if (bpUI)
+			BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
+			if (bpUI) {
+				//UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
+				//_MESSAGE("hidecount %d PA %d interacting %d isMenuOpen %d", hideCount, isInPA, isInteracting, isMenuOpen);
+				isInteracting = p->interactingState != INTERACTING_STATE::kNotInteracting;
+				isInPA = IsInPowerArmor(p);
+				if (hideCount + isInteracting > 0 && isMenuOpen) {
+					//msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kHide);
+					bpUI->SetVisible(false);
+					isMenuOpen = false;
+					//_MESSAGE("Hide (Interaction)");
+				}
+				else if (hideCount + isInPA + isInteracting == 0 && !isMenuOpen) {
+					//msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
+					bpUI->SetVisible(true);
+					isMenuOpen = true;
+					//_MESSAGE("Show (Interaction)");
+				}
+				for (int i = 0; i < 6; ++i) {
+					float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
+					float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
+					float scale = (avperm + avdamage) / avperm;
 					bpUI->UpdateBodypartCondition((BodyPartsUI::BodyParts)i, scale);
+				}
 			}
 			lastUpdated = *ptr_engineTime;
+		}
+	}
+
+	void SetVisible(bool enabled) {
+		if (uiMovie && uiMovie->asMovieRoot) {
+			//_MESSAGE("Update equipment slot %d equip %d", slot, equipped);
+			std::array<Scaleform::GFx::Value, 1> args;
+			args[0] = enabled;
+			bool succ = uiMovie->asMovieRoot->Invoke("root1.CharacterManager.SetVisible", nullptr, args.data(), args.size());
+			if (!succ) {
+				_MESSAGE("Invoke failed");
+			}
 		}
 	}
 
@@ -143,7 +173,7 @@ public:
 			std::array<Scaleform::GFx::Value, 2> args;
 			args[0] = slot;
 			args[1] = equipped;
-			bool succ = uiMovie->asMovieRoot->Invoke("root1.VaultBoyContainer.UpdateEquipment", nullptr, args.data(), args.size());
+			bool succ = uiMovie->asMovieRoot->Invoke("root1.CharacterManager.UpdateEquipment", nullptr, args.data(), args.size());
 			if (!succ) {
 				_MESSAGE("Invoke failed");
 			}
@@ -165,7 +195,7 @@ public:
 			std::array<Scaleform::GFx::Value, 2> args;
 			args[0] = (int)part;
 			args[1] = scale;
-			bool succ = uiMovie->asMovieRoot->Invoke("root1.VaultBoyContainer.UpdateBodypartCondition", nullptr, args.data(), args.size());
+			bool succ = uiMovie->asMovieRoot->Invoke("root1.CharacterManager.UpdateBodypartCondition", nullptr, args.data(), args.size());
 			if (!succ) {
 				_MESSAGE("Invoke failed");
 			}
@@ -176,44 +206,46 @@ public:
 		if (uiMovie && uiMovie->asMovieRoot) {
 			//_MESSAGE("Reset Equipment");
 			std::array<Scaleform::GFx::Value, 0> args;
-			bool succ = uiMovie->asMovieRoot->Invoke("root1.VaultBoyContainer.ResetEquipment", nullptr, args.data(), args.size());
+			bool succ = uiMovie->asMovieRoot->Invoke("root1.CharacterManager.ResetEquipment", nullptr, args.data(), args.size());
 			if (!succ) {
 				_MESSAGE("Invoke failed");
 			}
-
-			for (auto item = p->inventoryList->data.begin(); item != p->inventoryList->data.end(); ++item) {
-				if (item->stackData->IsEquipped()) {
-					if (item->object->formType == ENUM_FORM_ID::kARMO) {
-						TESObjectARMO* armor = static_cast<TESObjectARMO*>(item->object);
-						if (armor->bipedModelData.bipedObjectSlots & 0x1) {
-							UpdateEquipment(30, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x8) {
-							UpdateEquipment(33, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x800) {
-							UpdateEquipment(41, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x1000) {
-							UpdateEquipment(42, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x2000) {
-							UpdateEquipment(43, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x4000) {
-							UpdateEquipment(44, true);
-						}
-						else if (armor->bipedModelData.bipedObjectSlots & 0x8000) {
-							UpdateEquipment(45, true);
+			if (p->inventoryList) {
+				for (auto item = p->inventoryList->data.begin(); item != p->inventoryList->data.end(); ++item) {
+					if (item->stackData->IsEquipped()) {
+						if (item->object->formType == ENUM_FORM_ID::kARMO) {
+							TESObjectARMO* armor = static_cast<TESObjectARMO*>(item->object);
+							if (armor->bipedModelData.bipedObjectSlots & 0x1) {
+								UpdateEquipment(30, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x8) {
+								UpdateEquipment(33, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x800) {
+								UpdateEquipment(41, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x1000) {
+								UpdateEquipment(42, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x2000) {
+								UpdateEquipment(43, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x4000) {
+								UpdateEquipment(44, true);
+							}
+							else if (armor->bipedModelData.bipedObjectSlots & 0x8000) {
+								UpdateEquipment(45, true);
+							}
 						}
 					}
 				}
-			}
-			for (int i = 0; i < 6; ++i) {
-				float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
-				float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
-				float scale = (avperm + avdamage) / avperm;
-				UpdateBodypartCondition((BodyParts)i, scale);
+
+				for (int i = 0; i < 6; ++i) {
+					float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
+					float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
+					float scale = (avperm + avdamage) / avperm;
+					UpdateBodypartCondition((BodyParts)i, scale);
+				}
 			}
 		}
 	}
@@ -227,6 +259,7 @@ BodyPartsUI* BodyPartsUI::instance = nullptr;
 
 void RegisterMenu() {
 	UI* ui = UI::GetSingleton();
+	UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
 	if (ui) {
 		ui->RegisterMenu(UIName.c_str(), [](const UIMessage&)->IMenu* {
 			BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
@@ -235,6 +268,7 @@ void RegisterMenu() {
 			}
 			return bpUI;
 		});
+		msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
 	}
 }
 
@@ -242,30 +276,18 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 	virtual BSEventNotifyControl ProcessEvent(const MenuOpenCloseEvent& evn, BSTEventSource<MenuOpenCloseEvent>* src) override {
 		UI* ui = UI::GetSingleton();
 		UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
-		if (evn.menuName == UIName) {
-			Scaleform::Ptr<IMenu> bpUI = ui->GetMenu(UIName);
+		BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
+		if (msgQ && !ui->GetMenuOpen(UIName)) {
+			msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
 		}
-		/*else if (evn.menuName == "HUDMenu") {
-			if (!HUDMenu) {
-				HUDMenu = ui->GetMenu(evn.menuName).get();
-				_MESSAGE("HUDMenu %llx", HUDMenu);
-			}
-			if (evn.opening) {
-				msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
-			}
-			else {
-				msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kHide);
-			}
-		}*/
-		else if (evn.menuName == BSFixedString("LoadingMenu") && !evn.opening) {
+		//_MESSAGE("Menu %s opening %d", evn.menuName.c_str(), evn.opening);
+		if (evn.menuName == BSFixedString("LoadingMenu") && !evn.opening) {
 			hideCount = 0;
 			for (auto it = hideMenuList.begin(); it != hideMenuList.end(); ++it) {
 				if (ui->GetMenuOpen(*it)) {
 					++hideCount;
 				}
 			}
-			isInPA = IsInPowerArmor(p);
-			BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
 			if (bpUI)
 				bpUI->ResetEquipment();
 		}
@@ -273,20 +295,26 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 			if (evn.menuName == *it) {
 				if (evn.opening) {
 					++hideCount;
+					//_MESSAGE("%s ++ %d", evn.menuName.c_str(), hideCount);
 				}
 				else {
 					--hideCount;
+					//_MESSAGE("%s -- %d", evn.menuName.c_str(), hideCount);
 				}
 				break;
 			}
 		}
-		if (msgQ) {
-			if (hideCount + isInPA > 0) {
-				msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kHide);
+		if (bpUI) {
+			if (hideCount + isInPA + isInteracting > 0 && isMenuOpen) {
+				//msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kHide);
+				bpUI->SetVisible(false);
+				isMenuOpen = false;
 				//_MESSAGE("Hide");
 			}
-			else {
-				msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
+			else if(hideCount + isInPA + isInteracting == 0 && !isMenuOpen){
+				//msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
+				bpUI->SetVisible(true);
+				isMenuOpen = true;
 				//_MESSAGE("Show");
 			}
 		}
@@ -402,6 +430,7 @@ public:
 		}
 		if (evn.formId == 0x7) {
 			BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
+			isInPA = IsInPowerArmor(p);
 			if (bpUI)
 				bpUI->ResetEquipment();
 		}
