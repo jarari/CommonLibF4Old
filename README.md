@@ -2,7 +2,7 @@
 Check out [CommonLibF4](https://github.com/Ryan-rsm-McKenzie/CommonLibF4) for the orignal project.
 
 
-# ShieldFramework
+# nlohmann's JSON for Modern C++
 
 This project contains [nlohmann's JSON for Modern C++](https://github.com/nlohmann/json) licensed under the MIT License.
 
