@@ -58,6 +58,7 @@ PlayerCharacter* p;
 PlayerCamera* pcam;
 PlayerControls* pc;
 NiNode* lastRoot;
+BSBound* bbx;
 CharacterMoveFinishEventWatcher* PCWatcher;
 ActorValueInfo* rightAttackCondition;
 ActorValueInfo* leftAttackCondition;
@@ -81,11 +82,18 @@ float leanTime;
 float leanTimeCost = 1.0f;
 float leanMax = 15.0f;
 float leanMax3rd = 30.0f;
+float leanCollisionThreshold = 0.08f;
 bool toggleLean = false;
 uint32_t leanLeft = 0x51;
 uint32_t leanRight = 0x45;
 bool leanADSOnly = false;
 bool leanR6Style = false;
+bool collisionDevMode = false;
+bool buttonDevMode = false;
+float lastHeight = 120.0f;
+float heightDiffThreshold = 5.0f;
+float heightBuffer = 16.0f;
+bool dynamicHeight = false;
 
 #pragma endregion
 
@@ -383,26 +391,19 @@ void PreparePlayerSkeleton(NiNode* node) {
 	}
 }
 
-void ResizeCollisionShape(CompoundShapeData* data, vector<hkVector4f>& cachedShape, float ratio, float bumperWidthHalf) {
+void ResizeCollisionShapeX(CompoundShapeData* data, vector<hkVector4f>& cachedShape, float ratio, float bumperHalf) {
 	uintptr_t polytopeShape = (uintptr_t)data->shape;
 	uint16_t vertexSize = *(uint16_t*)(polytopeShape + 0x30);
 	uint16_t vertexOffset = *(uint16_t*)(polytopeShape + 0x32);
-	*(float*)((uintptr_t)data + 0x80) = -bumperWidthHalf;
-	*(float*)((uintptr_t)data + 0x84) = bumperWidthHalf;
+	*(float*)((uintptr_t)data + 0x80) = -bumperHalf;
+	*(float*)((uintptr_t)data + 0x90) = bumperHalf;
 	if (cachedShape.size() == 0) {
 		for (int i = 0; i < vertexSize; ++i) {
 			cachedShape.push_back(*(hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i));
 		}
 	}
-	NiMatrix3 mat;
-	SetMatrix33(
-		1 + ratio, 0, 0,
-		0, 1, 0,
-		0, 0, 1,
-		mat
-	);
 	for (int i = 0; i < cachedShape.size(); ++i) {
-		*(hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i) = mat * cachedShape[i] + hkVector4f(bumperWidthHalf, 0, 0, 0);
+		((hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i))->x = cachedShape[i].x * ratio + bumperHalf;
 	}
 }
 
@@ -541,7 +542,9 @@ public:
 		Actor* a = (Actor*)((uintptr_t)this - 0x150);
 		if (a->Get3D()) {
 			NiAVObject* node = a->Get3D();
+			NiAVObject* tpNode = a->Get3D(false);
 			if (node != lastRoot) {
+				bbx = (BSBound*)tpNode->GetExtraData("BBX");
 				lastRoot = node->IsNode();
 				PreparePlayerSkeleton(lastRoot);
 			}
@@ -605,21 +608,21 @@ public:
 			}
 			if (con) {
 				rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
-				float ratio = (1 - cos(rotZ * toRad)) * 10.0f * (isFP + 1);
-				float signRotZ = Sign(rotZ);
-				uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
 				if (deltaLeanWeight != 0) {
+					float ratio = (1 - cos(rotZ * toRad)) * 4.0f;
+					float signRotZ = Sign(rotZ);
+					uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
 					hknpShape* bumper = con->shapes[0]._ptr;
 					CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
 					if (data && data->shape) {
 						float bumperWidthHalf = 0.257f * ratio * signRotZ;
-						ResizeCollisionShape(data, cachedShape0, ratio, bumperWidthHalf);
+						ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
 					}
 					bumper = con->shapes[1]._ptr;
 					data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
 					if (data && data->shape) {
 						float bumperWidthHalf = 0.307f * ratio * signRotZ;
-						ResizeCollisionShape(data, cachedShape1, ratio, bumperWidthHalf);
+						ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
 					}
 					if (charProxy) {
 						NiPoint3 right = CrossProduct(con->forwardVec, con->up);
@@ -627,11 +630,16 @@ public:
 						hkVector4f& charProxyVel = *(hkVector4f*)(charProxy + 0xA0);
 						hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
 						//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
-						hkVector4f diff = charProxyVel - con->outVelocity;
-						diff.z = 0;
-						//_MESSAGE("Length %f", diff.Length());
-						if (diff.Length() > 0.055f) {
-							//_MESSAGE("Collision");
+						float diff = DotProduct(charProxyVel - con->outVelocity, right * -signRotZ);
+						if (collisionDevMode) {
+							_MESSAGE("Length %f", diff);
+						}
+						if (diff > leanCollisionThreshold) {
+							if (collisionDevMode) {
+								_MESSAGE("Collision");
+							}
+							hkVector4f displacement = right * translateDist * deltaLeanWeight / HAVOKTOFO4;
+							charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
 						}
 						else {
 							hkVector4f displacement = right * translateDist * deltaLeanWeight / HAVOKTOFO4;
@@ -641,9 +649,40 @@ public:
 						}
 					}
 				}
+				if (dynamicHeight) {
+					if (tpNode) {
+						NiNode* head = (NiNode*)tpNode->GetObjectByName("HEAD");
+						if (!head)
+							head = (NiNode*)tpNode->GetObjectByName("Head");
+						if (head) {
+							float height = head->world.translate.z + heightBuffer - a->data.location.z;
+							//_MESSAGE("Current height %f", height);
+							if (bbx) {
+								float optimalHeight = bbx->extents.z * 2.0f;
+								//_MESSAGE("Optimal height %f", optimalHeight);
+								if (abs(height - lastHeight) > heightDiffThreshold) {
+									float ratio = height / optimalHeight;
+									hknpShape* bumper = con->shapes[0]._ptr;
+									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+									if (data) {
+										data->translate.z = ratio - 1.0f;
+										data->scale.z = ratio;
+									}
+									bumper = con->shapes[1]._ptr;
+									data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+									if (data) {
+										data->translate.z = ratio - 1.0f;
+										data->scale.z = ratio;
+									}
+									//_MESSAGE("Changed height");
+									lastHeight = height;
+								}
+							}
+						}
+					}
+				}
 			}
 
-			NiAVObject* tpNode = a->Get3D(false);
 			if (tpNode) {
 				rotZ = leanMax3rd * leanWeight;
 				transZ = leanMax3rd * leanWeight / 3.0f;
@@ -845,7 +884,9 @@ public:
 		if (evn->device == INPUT_DEVICE::kMouse)
 			id += 256;
 
-		//_MESSAGE("Button event fired id %d held %f", id, evn->heldDownSecs);
+		if (buttonDevMode) {
+			_MESSAGE("Button event fired id %d held %f", id, evn->heldDownSecs);
+		}
 
 		if (!leanADSOnly || (leanADSOnly && IsInADS(p))) {
 			if (toggleLean) {
@@ -1005,6 +1046,12 @@ void LoadConfigs() {
 	leanRight = std::stoi(ini.GetValue("Leaning", "LeanRight", "0x45"), 0, 16);
 	leanADSOnly = std::stoi(ini.GetValue("Leaning", "ADSOnly", "0")) > 0;
 	leanR6Style = std::stoi(ini.GetValue("Leaning", "R6Style", "0")) > 0;
+	dynamicHeight = std::stoi(ini.GetValue("Height", "dynamicHeight", "1")) > 0;
+	heightDiffThreshold = std::stof(ini.GetValue("Height", "heightDiffThreshold", "5.0"));
+	heightBuffer = std::stof(ini.GetValue("Height", "heightBuffer", "16.0"));
+	leanCollisionThreshold = std::stof(ini.GetValue("Dev", "leanCollisionThreshold", "0.08"));
+	collisionDevMode = std::stoi(ini.GetValue("Dev", "collisionDevMode", "0")) > 0;
+	buttonDevMode = std::stoi(ini.GetValue("Dev", "buttonDevMode", "0")) > 0;
 	ini.Reset();
 }
 
