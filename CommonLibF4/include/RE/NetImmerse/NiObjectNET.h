@@ -11,7 +11,7 @@ namespace RE
 {
 	class NiExtraDataContainer : public BSTArray<NiExtraData*> {
 	public:
-		BSSpinLock lock;
+		BSAutoLock<BSSpinLock, BSAutoLockDefaultPolicy> lock;
 	};
 	class NiTimeController;
 
