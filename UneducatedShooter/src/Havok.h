@@ -33,6 +33,84 @@ namespace RE {
 		hknpPhysicsSystem* physicsSystem;
 	};*/
 
+	struct CompoundShapeData {
+		hkVector4f rotation[3];
+		hkVector4f translate;
+		hkVector4f scale;
+		hknpShape* shape;
+	};
+
+	struct unkParam {
+	public:
+		uint64_t unk = 0;
+		float out = 0;
+	};
+
+	struct CastResult {
+	public:
+		struct Data {
+			hkVector4f normal;
+			hkVector4f unk;
+			hkVector4f localHit;
+		};
+		Data* data;
+	};
+
+	class __declspec(novtable) hkaRaycastInterface {
+	public:
+		static constexpr auto RTTI{ RTTI::hkaRaycastInterface };
+		static constexpr auto VTABLE{ VTABLE::hkaRaycastInterface };
+
+		virtual ~hkaRaycastInterface() = default;
+
+		virtual hkVector4f castRay(unkParam, const hkVector4f, const hkVector4f, uint32_t, float&, hkVector4f&) = 0;
+
+		virtual hkVector4f castRay(unkParam, const hkVector4f, const hkVector4f, float&, hkVector4f&) = 0;
+	};
+
+	class hkbSpatialQueryInterface : public hkaRaycastInterface {
+	public:
+		static constexpr auto RTTI{ RTTI::hkbSpatialQueryInterface };
+		static constexpr auto VTABLE{ VTABLE::hkbSpatialQueryInterface };
+	};
+
+	class CachedRaycastData : public hkbSpatialQueryInterface {
+	public:
+		static constexpr auto RTTI{ RTTI::CachedRaycastData };
+		static constexpr auto VTABLE{ VTABLE::CachedRaycastData };
+
+		uintptr_t _vtable;
+		uint32_t unk08;
+		uint32_t unk0C;
+		bhkWorld* world;
+		uint32_t unk18;
+		uint16_t unk1C;
+		uint8_t unk1E;
+		bool unk1F;
+		F4_HEAP_REDEFINE_NEW(CachedRaycastData);
+	};
+
+	class FakeCachedRaycastData {
+	public:
+		static constexpr auto RTTI{ RTTI::CachedRaycastData };
+		static constexpr auto VTABLE{ VTABLE::CachedRaycastData };
+
+		FakeCachedRaycastData() {
+			_vtable = REL::Relocation<uint64_t>{ FakeCachedRaycastData::VTABLE[0] }.address();
+			unk08 = 0x0;
+			unk18 = 0x591;
+		}
+		uintptr_t _vtable;
+		uint32_t unk08;
+		uint32_t unk0C;
+		bhkWorld* world;
+		uint32_t unk18;
+		uint16_t unk1C;
+		uint8_t unk1E;
+		bool unk1F;
+		uint64_t unk20;
+	};
+
 	class hkTransformf {
 	public:
 		void setIdentity() {
