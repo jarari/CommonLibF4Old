@@ -76,6 +76,7 @@ int hideCount = 0;
 bool isInPA = false;
 bool isInteracting = false;
 bool isMenuOpen = false;
+bool isLoading = false;
 IMenu* HUDMenu;
 ActorValueInfo* perceptionCondition;
 ActorValueInfo* enduranceCondition;
@@ -97,8 +98,17 @@ float lastUpdated = 0;
 class BodyPartsUI : public IMenu {
 private:
 	static BodyPartsUI* instance;
-
+	int partIndex = 0;
 public:
+
+	enum BodyParts {
+		Head,
+		Torso,
+		RArm,
+		LArm,
+		RLeg,
+		LLeg
+	};
 
 	BodyPartsUI() : IMenu() {
 		if (instance) {
@@ -123,9 +133,24 @@ public:
 			_MESSAGE("BodyPartsUI swf load failed");
 		}
 	}
+
+	virtual void AdvanceMovie(float delta, uint64_t time) override {
+		//_MESSAGE("AdvanceMovie called delta %f time %f", delta, time);
+		BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
+		if (bpUI) {
+			float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[partIndex]);
+			float avperm = p->GetPermanentActorValue(**BodyPartConditions[partIndex]);
+			float scale = (avperm + avdamage) / avperm;
+			bpUI->UpdateBodypartCondition((BodyPartsUI::BodyParts)partIndex, scale);
+			++partIndex;
+			if (partIndex > 5)
+				partIndex = 0;
+		}
+		__super::AdvanceMovie(delta, time);
+	}
 	
 	virtual void PostDisplay() override {
-		if (*ptr_engineTime - lastUpdated >= 0.1f) {
+		if (*ptr_engineTime - lastUpdated >= 0.2f) {
 			BodyPartsUI* bpUI = BodyPartsUI::GetSingleton();
 			if (bpUI) {
 				//UIMessageQueue* msgQ = UIMessageQueue::GetSingleton();
@@ -143,12 +168,6 @@ public:
 					bpUI->SetVisible(true);
 					isMenuOpen = true;
 					//_MESSAGE("Show (Interaction)");
-				}
-				for (int i = 0; i < 6; ++i) {
-					float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
-					float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
-					float scale = (avperm + avdamage) / avperm;
-					bpUI->UpdateBodypartCondition((BodyPartsUI::BodyParts)i, scale);
 				}
 			}
 			lastUpdated = *ptr_engineTime;
@@ -179,15 +198,6 @@ public:
 			}
 		}
 	}
-
-	enum BodyParts {
-		Head,
-		Torso,
-		RArm,
-		LArm,
-		RLeg,
-		LLeg
-	};
 
 	void UpdateBodypartCondition(BodyParts part, double scale) {
 		if (uiMovie && uiMovie->asMovieRoot) {
@@ -239,13 +249,6 @@ public:
 						}
 					}
 				}
-
-				for (int i = 0; i < 6; ++i) {
-					float avdamage = p->GetModifier(ACTOR_VALUE_MODIFIER::Damage, **BodyPartConditions[i]);
-					float avperm = p->GetPermanentActorValue(**BodyPartConditions[i]);
-					float scale = (avperm + avdamage) / avperm;
-					UpdateBodypartCondition((BodyParts)i, scale);
-				}
 			}
 		}
 	}
@@ -281,15 +284,21 @@ class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
 			msgQ->AddMessage(UIName, RE::UI_MESSAGE_TYPE::kShow);
 		}
 		//_MESSAGE("Menu %s opening %d", evn.menuName.c_str(), evn.opening);
-		if (evn.menuName == BSFixedString("LoadingMenu") && !evn.opening) {
-			hideCount = 0;
-			for (auto it = hideMenuList.begin(); it != hideMenuList.end(); ++it) {
-				if (ui->GetMenuOpen(*it)) {
-					++hideCount;
-				}
+		if (evn.menuName == BSFixedString("LoadingMenu")) {
+			if (evn.opening) {
+				isLoading = true;
 			}
-			if (bpUI)
-				bpUI->ResetEquipment();
+			else {
+				hideCount = 0;
+				for (auto it = hideMenuList.begin(); it != hideMenuList.end(); ++it) {
+					if (ui->GetMenuOpen(*it)) {
+						++hideCount;
+					}
+				}
+				if (bpUI)
+					bpUI->ResetEquipment();
+				isLoading = false;
+			}
 		}
 		for (auto it = hideMenuList.begin(); it != hideMenuList.end(); ++it) {
 			if (evn.menuName == *it) {
