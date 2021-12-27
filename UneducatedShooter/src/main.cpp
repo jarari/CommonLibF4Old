@@ -90,6 +90,8 @@ bool leanADSOnly = false;
 bool leanR6Style = false;
 bool collisionDevMode = false;
 bool buttonDevMode = false;
+bool iniDevMode = false;
+float lastiniUpdate;
 float lastHeight = 120.0f;
 float heightDiffThreshold = 5.0f;
 float heightBuffer = 16.0f;
@@ -261,6 +263,37 @@ float Sign(float f) {
 
 #pragma region Functions
 
+void LoadConfigs() {
+	ini.LoadFile("Data\\F4SE\\Plugins\\UneducatedShooter.ini");
+	rotLimitX = std::stof(ini.GetValue("Inertia", "rotLimitX", "12.0"));
+	rotLimitY = std::stof(ini.GetValue("Inertia", "rotLimitY", "7.0"));
+	rotDivX = std::stof(ini.GetValue("Inertia", "rotDivX", "10.0"));
+	rotDivY = std::stof(ini.GetValue("Inertia", "rotDivY", "15.0"));
+	rotDivXPad = std::stof(ini.GetValue("Inertia", "rotDivXPad", "4.0"));
+	rotDivYPad = std::stof(ini.GetValue("Inertia", "rotDivYPad", "8.0"));
+	rotADSConditionMult = std::stof(ini.GetValue("Inertia", "rotADSConditionMult", "5.0"));
+	rotReturnDiv = std::stof(ini.GetValue("Inertia", "rotReturnDiv", "1.75"));
+	rotReturnDivMin = std::stof(ini.GetValue("Inertia", "rotReturnDivMin", "1.05"));
+	rotReturnStep = std::stof(ini.GetValue("Inertia", "rotReturnStep", "0.0"));
+	rotDisableInADS = std::stoi(ini.GetValue("Inertia", "rotDisableInADS", "0")) > 0;
+	leanTimeCost = std::stof(ini.GetValue("Leaning", "leanTimeCost", "1.0"));
+	leanMax = std::stof(ini.GetValue("Leaning", "leanMax", "15.0"));
+	leanMax3rd = std::stof(ini.GetValue("Leaning", "leanMax3rd", "30.0"));
+	toggleLean = std::stoi(ini.GetValue("Leaning", "ToggleLean", "0")) > 0;
+	leanLeft = std::stoi(ini.GetValue("Leaning", "LeanLeft", "0x51"), 0, 16);
+	leanRight = std::stoi(ini.GetValue("Leaning", "LeanRight", "0x45"), 0, 16);
+	leanADSOnly = std::stoi(ini.GetValue("Leaning", "ADSOnly", "0")) > 0;
+	leanR6Style = std::stoi(ini.GetValue("Leaning", "R6Style", "0")) > 0;
+	dynamicHeight = std::stoi(ini.GetValue("Height", "dynamicHeight", "1")) > 0;
+	heightDiffThreshold = std::stof(ini.GetValue("Height", "heightDiffThreshold", "5.0"));
+	heightBuffer = std::stof(ini.GetValue("Height", "heightBuffer", "16.0"));
+	leanCollisionThreshold = std::stof(ini.GetValue("Dev", "leanCollisionThreshold", "0.08"));
+	collisionDevMode = std::stoi(ini.GetValue("Dev", "collisionDevMode", "0")) > 0;
+	buttonDevMode = std::stoi(ini.GetValue("Dev", "buttonDevMode", "0")) > 0;
+	iniDevMode = std::stoi(ini.GetValue("Dev", "iniDevMode", "0")) > 0;
+	ini.Reset();
+}
+
 void PreparePlayerSkeleton(NiNode* node) {
 	NiAVObject* fpNode = p->Get3D(true);
 	if (node == fpNode) {
@@ -403,7 +436,7 @@ void ResizeCollisionShapeX(CompoundShapeData* data, vector<hkVector4f>& cachedSh
 		}
 	}
 	for (int i = 0; i < cachedShape.size(); ++i) {
-		((hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i))->x = cachedShape[i].x * ratio + bumperHalf;
+		((hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i))->x = cachedShape[i].x * ratio - bumperHalf;
 	}
 }
 
@@ -539,6 +572,10 @@ class CharacterMoveFinishEventWatcher {
 public:
 	typedef BSEventNotifyControl (CharacterMoveFinishEventWatcher::* FnProcessEvent)(bhkCharacterMoveFinishEvent& evn, BSTEventSource<bhkCharacterMoveFinishEvent>* dispatcher);
 	BSEventNotifyControl HookedProcessEvent(bhkCharacterMoveFinishEvent& evn, BSTEventSource<bhkCharacterMoveFinishEvent>* src) {
+		if (iniDevMode && *ptr_engineTime - lastiniUpdate > 5.0f) {
+			LoadConfigs();
+			lastiniUpdate = *ptr_engineTime;
+		}
 		Actor* a = (Actor*)((uintptr_t)this - 0x150);
 		if (a->Get3D()) {
 			NiAVObject* node = a->Get3D();
@@ -597,7 +634,8 @@ public:
 			leanWeight += deltaLeanWeight;
 
 			float pcScale = GetActorScale(p);
-			float translateDist = isFP ? 122.0f * sin(leanMax * toRad) * pcScale : 61.0f * sin(leanMax3rd * toRad) * pcScale;
+			float heightRatio = 1;
+			float transDist = 0;
 			NiPoint3 pos, dir;
 			a->GetEyeVector(pos, dir, true);
 			NiPoint3 heading = Normalize(NiPoint3(dir.x, dir.y, 0));
@@ -607,72 +645,81 @@ public:
 				con = a->currentProcess->middleHigh->charController.get();
 			}
 			if (con) {
-				rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
-				if (deltaLeanWeight != 0) {
-					float ratio = (1 - cos(rotZ * toRad)) * 4.0f;
-					float signRotZ = Sign(rotZ);
-					uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
-					hknpShape* bumper = con->shapes[0]._ptr;
-					CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-					if (data && data->shape) {
-						float bumperWidthHalf = 0.257f * ratio * signRotZ;
-						ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
-					}
-					bumper = con->shapes[1]._ptr;
-					data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-					if (data && data->shape) {
-						float bumperWidthHalf = 0.307f * ratio * signRotZ;
-						ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
-					}
-					if (charProxy) {
-						NiPoint3 right = CrossProduct(con->forwardVec, con->up);
-						hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
-						hkVector4f& charProxyVel = *(hkVector4f*)(charProxy + 0xA0);
-						hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
-						//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
-						float diff = DotProduct(charProxyVel - con->outVelocity, right * -signRotZ);
-						if (collisionDevMode) {
-							_MESSAGE("Length %f", diff);
-						}
-						if (diff > leanCollisionThreshold) {
-							if (collisionDevMode) {
-								_MESSAGE("Collision");
+				if (tpNode) {
+					NiNode* head = (NiNode*)tpNode->GetObjectByName("HEAD");
+					if (!head)
+						head = (NiNode*)tpNode->GetObjectByName("Head");
+					if (head) {
+						float height = head->world.translate.z + heightBuffer - a->data.location.z;
+						//_MESSAGE("Current height %f", height);
+						if (bbx) {
+							float optimalHeight = bbx->extents.z * 2.0f;
+							transDist = isFP ? optimalHeight * sin(leanMax * toRad) : bbx->extents.z * sin(leanMax3rd * toRad);
+							heightRatio = height / optimalHeight;
+							//_MESSAGE("Optimal height %f", optimalHeight);
+							rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
+							if (deltaLeanWeight != 0) {
+								float ratio = (1 - cos(rotZ * toRad)) * 4.0f * (isFP + 1);
+								float signRotZ = Sign(rotZ);
+								uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
+								hknpShape* bumper = con->shapes[0]._ptr;
+								CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+								if (data && data->shape) {
+									float bumperWidthHalf = 0.257f * ratio * signRotZ;
+									ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
+								}
+								bumper = con->shapes[1]._ptr;
+								data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+								if (data && data->shape) {
+									float bumperWidthHalf = 0.307f * ratio * signRotZ;
+									if (collisionDevMode) {
+										_MESSAGE("bumperWidthHalf %f", bumperWidthHalf);
+									}
+									ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
+								}
+								if (charProxy) {
+									NiPoint3 right = CrossProduct(con->forwardVec, con->up);
+									hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+									hkVector4f& charProxyVel = *(hkVector4f*)(charProxy + 0xA0);
+									hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
+									//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
+									float diff = DotProduct(charProxyVel - con->velocityMod, right * -deltaLeanWeight);
+									if (collisionDevMode) {
+										_MESSAGE("Diff %f", diff);
+									}
+									if (diff > leanCollisionThreshold) {
+										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
+										charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
+										if (collisionDevMode) {
+											_MESSAGE("Collision");
+											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+										}
+									}
+									else {
+										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
+										//float& keepDistance = *(float*)(charProxy + 0xE0);
+										//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
+										charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
+										if (collisionDevMode) {
+											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+										}
+									}
+								}
 							}
-							hkVector4f displacement = right * translateDist * deltaLeanWeight / HAVOKTOFO4;
-							charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
-						}
-						else {
-							hkVector4f displacement = right * translateDist * deltaLeanWeight / HAVOKTOFO4;
-							//float& keepDistance = *(float*)(charProxy + 0xE0);
-							//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
-							charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
-						}
-					}
-				}
-				if (dynamicHeight) {
-					if (tpNode) {
-						NiNode* head = (NiNode*)tpNode->GetObjectByName("HEAD");
-						if (!head)
-							head = (NiNode*)tpNode->GetObjectByName("Head");
-						if (head) {
-							float height = head->world.translate.z + heightBuffer - a->data.location.z;
-							//_MESSAGE("Current height %f", height);
-							if (bbx) {
-								float optimalHeight = bbx->extents.z * 2.0f;
-								//_MESSAGE("Optimal height %f", optimalHeight);
+
+							if (dynamicHeight) {
 								if (abs(height - lastHeight) > heightDiffThreshold) {
-									float ratio = height / optimalHeight;
 									hknpShape* bumper = con->shapes[0]._ptr;
 									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
 									if (data) {
-										data->translate.z = ratio - 1.0f;
-										data->scale.z = ratio;
+										data->translate.z = heightRatio - 1.0f;
+										data->scale.z = heightRatio;
 									}
 									bumper = con->shapes[1]._ptr;
 									data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
 									if (data) {
-										data->translate.z = ratio - 1.0f;
-										data->scale.z = ratio;
+										data->translate.z = heightRatio - 1.0f;
+										data->scale.z = heightRatio;
 									}
 									//_MESSAGE("Changed height");
 									lastHeight = height;
@@ -684,6 +731,7 @@ public:
 			}
 
 			if (tpNode) {
+				NiPoint3 colTransX = NiPoint3(transDist * leanWeight, 0, 0);
 				rotZ = leanMax3rd * leanWeight;
 				transZ = leanMax3rd * leanWeight / 3.0f;
 				float rotXRadByThree = rotX * toRad / 3.0f;
@@ -748,12 +796,12 @@ public:
 
 				NiNode* comInserted = (NiNode*)tpNode->GetObjectByName("COMInserted");
 				if (comInserted) {
-					comInserted->local.translate = NiPoint3(translateDist * leanWeight, 0, 0);
+					comInserted->local.translate = colTransX;
 				}
 
 				NiNode* cameraInserted = (NiNode*)tpNode->GetObjectByName("CameraInserted");
 				if (cameraInserted) {
-					cameraInserted->local.translate = NiPoint3(translateDist * leanWeight, 0, 0);
+					cameraInserted->local.translate = colTransX;
 					//_MESSAGE("cameraInserted");
 				}
 			}
@@ -761,6 +809,7 @@ public:
 			if (isFP) {
 				//float rayDist = 70.0f * abs(sin(leanMax * toRad));
 				//CastRay(a, rayOrigin, rayDir, rayDist);
+				NiPoint3 colTransX = NiPoint3(transDist * leanWeight * heightRatio, 0, 0);
 				rotZ = leanMax * leanWeight;
 				transZ = leanMax * leanWeight / 3.0f;
 				NiNode* chestInserted1st = (NiNode*)node->GetObjectByName("ChestInserted1st");
@@ -774,7 +823,7 @@ public:
 				if (comInserted1st) {
 					NiMatrix3 rot = GetRotationMatrix33(rotZ * toRad, 0, 0);
 					comInserted1st->local.rotate = rot;
-					comInserted1st->local.translate = NiPoint3(translateDist * leanWeight, 0, 0);
+					comInserted1st->local.translate = colTransX;
 					//_MESSAGE("comInserted");
 				}
 
@@ -783,7 +832,7 @@ public:
 				if (camera && cameraInserted1st) {
 					if (!leanR6Style) {
 						NiMatrix3 rot = GetRotationMatrix33(rotZ * toRad, 0, 0);
-						cameraInserted1st->local.translate = NiPoint3(translateDist * leanWeight, 0, 0);
+						cameraInserted1st->local.translate = colTransX;
 						cameraInserted1st->local.rotate = rot;
 					}
 					else {
@@ -796,29 +845,14 @@ public:
 								zoomData = ((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->zoomData->zoomData.cameraOffset;
 							}
 						}
-						NiPoint3 camPos = rot * (camera->local.translate + zoomData);
-						cameraInserted1st->local.translate = camPos + Inverse(rot) * (camPos * -1) + NiPoint3(translateDist * leanWeight, 0, 0);
+						NiPoint3 camPos = camera->local.translate + zoomData;
+						cameraInserted1st->local.translate = rot * camPos - camPos + colTransX;
 						cameraInserted1st->local.rotate.MakeIdentity();
-						//_MESSAGE("cam %f %f %f", cameraInserted->local.translate.x, cameraInserted->local.translate.y, cameraInserted->local.translate.z);
+						//_MESSAGE("cam %f %f %f", cameraInserted1st->local.translate.x, cameraInserted1st->local.translate.y, cameraInserted1st->local.translate.z);
 					}
 					//_MESSAGE("cameraInserted");
 				}
 			}
-
-			/*BSBound* bbx = (BSBound*)node->GetExtraData("BBX");
-
-			if (bbx) {
-				//From https://github.com/WirelessLan/F4SEPlugins/blob/main/PedoHeightFix/SkeletonManager.cpp
-				float height = 64.0f * GetActorScale(a);
-				float squeezedHeight = height / 2.0f + height / 2.0f * cos(rotZ * toRad);
-				float squeezedWidth = 14.0f * height / squeezedHeight;
-				_MESSAGE("New bound width %f height %f", squeezedWidth, squeezedHeight);
-
-				bbx->center.y = 14.0f - squeezedWidth;
-				bbx->extents.y = squeezedWidth;
-				bbx->center.z = squeezedHeight;
-				bbx->extents.z = squeezedHeight;
-			}*/
 
 			float step = rotReturnStep * conditionalMultiplier * timeMult;
 			float retDiv = max(pow(rotReturnDiv * conditionalMultiplier, timeMult), rotReturnDivMin);
@@ -1023,36 +1057,6 @@ void InitializePlugin() {
 	ObjectLoadWatcher* olw = new ObjectLoadWatcher();
 	ObjectLoadedEventSource::GetSingleton()->RegisterSink(olw);
 	rayInterface = (CachedRaycastData*)new FakeCachedRaycastData();
-}
-
-void LoadConfigs() {
-	ini.LoadFile("Data\\F4SE\\Plugins\\UneducatedShooter.ini");
-	rotLimitX = std::stof(ini.GetValue("Inertia", "rotLimitX", "12.0"));
-	rotLimitY = std::stof(ini.GetValue("Inertia", "rotLimitY", "7.0"));
-	rotDivX = std::stof(ini.GetValue("Inertia", "rotDivX", "10.0"));
-	rotDivY = std::stof(ini.GetValue("Inertia", "rotDivY", "15.0"));
-	rotDivXPad = std::stof(ini.GetValue("Inertia", "rotDivXPad", "4.0"));
-	rotDivYPad = std::stof(ini.GetValue("Inertia", "rotDivYPad", "8.0"));
-	rotADSConditionMult = std::stof(ini.GetValue("Inertia", "rotADSConditionMult", "5.0"));
-	rotReturnDiv = std::stof(ini.GetValue("Inertia", "rotReturnDiv", "1.75"));
-	rotReturnDivMin = std::stof(ini.GetValue("Inertia", "rotReturnDivMin", "1.05"));
-	rotReturnStep = std::stof(ini.GetValue("Inertia", "rotReturnStep", "0.0"));
-	rotDisableInADS = std::stoi(ini.GetValue("Inertia", "rotDisableInADS", "0")) > 0;
-	leanTimeCost = std::stof(ini.GetValue("Leaning", "leanTimeCost", "1.0"));
-	leanMax = std::stof(ini.GetValue("Leaning", "leanMax", "15.0"));
-	leanMax3rd = std::stof(ini.GetValue("Leaning", "leanMax3rd", "30.0"));
-	toggleLean = std::stoi(ini.GetValue("Leaning", "ToggleLean", "0")) > 0;
-	leanLeft = std::stoi(ini.GetValue("Leaning", "LeanLeft", "0x51"), 0, 16);
-	leanRight = std::stoi(ini.GetValue("Leaning", "LeanRight", "0x45"), 0, 16);
-	leanADSOnly = std::stoi(ini.GetValue("Leaning", "ADSOnly", "0")) > 0;
-	leanR6Style = std::stoi(ini.GetValue("Leaning", "R6Style", "0")) > 0;
-	dynamicHeight = std::stoi(ini.GetValue("Height", "dynamicHeight", "1")) > 0;
-	heightDiffThreshold = std::stof(ini.GetValue("Height", "heightDiffThreshold", "5.0"));
-	heightBuffer = std::stof(ini.GetValue("Height", "heightBuffer", "16.0"));
-	leanCollisionThreshold = std::stof(ini.GetValue("Dev", "leanCollisionThreshold", "0.08"));
-	collisionDevMode = std::stoi(ini.GetValue("Dev", "collisionDevMode", "0")) > 0;
-	buttonDevMode = std::stoi(ini.GetValue("Dev", "buttonDevMode", "0")) > 0;
-	ini.Reset();
 }
 
 #pragma endregion
