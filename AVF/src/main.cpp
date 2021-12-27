@@ -1,6 +1,8 @@
 #include <Windows.h>
 #include <unordered_map>
 #include <vector>
+#include <MathUtils.h>
+#define HAVOKtoFO4 69.99124f
 using namespace RE;
 using std::unordered_map;
 using std::vector;
@@ -32,6 +34,19 @@ public:
 		stepZ = 0.0f;
 	}
 };
+
+namespace RE {
+	class hkTransformf {
+	public:
+		void setIdentity() {
+			m_rotation.MakeIdentity();
+			m_translation = hkVector4f();
+		}
+		NiMatrix3 m_rotation;
+		hkVector4f m_translation;
+	};
+	typedef hkTransformf hkTransform;
+}
 
 REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
 const float VelocityData::stepTime = 0.016667f;
@@ -249,6 +264,54 @@ bool IsOnGroundPapyrus(std::monostate, Actor* a) {
 	return IsOnGround(a);
 }
 
+void SetPositionQuick(std::monostate, Actor* a, float x, float y, float z) {
+	if (a) {
+		if (a->currentProcess) {
+			bhkCharacterController* con = a->currentProcess->middleHigh->charController.get();
+			if (con) {
+				uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
+				if (charProxy) {
+					hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+					charProxyTransform->m_translation.x = x / HAVOKtoFO4;
+					charProxyTransform->m_translation.y = y / HAVOKtoFO4;
+					charProxyTransform->m_translation.z = z / HAVOKtoFO4;
+					//logger::warn(_MESSAGE("(SetPositionQuick) Orig %f %f %f Havok %f %f %f", x, y, z, charProxyTransform->m_translation.x, charProxyTransform->m_translation.y, charProxyTransform->m_translation.z));
+				}
+			}
+		}
+		else {
+			logger::warn(_MESSAGE("(SetPositionQuick) Failed to run on Actor %llx", a->formID));
+		}
+	}
+	else {
+		logger::warn(_MESSAGE("(SetPositionQuick) Actor is null"));
+	}
+}
+
+std::vector<float> GetActorAngle(std::monostate, Actor* a) {
+	std::vector<float> result = std::vector<float>({ 0, 0, 0 });
+	result[0] = a->data.angle.x;
+	result[1] = a->data.angle.y;
+	result[2] = a->data.angle.z;
+	return result;
+}
+
+void SetAngleQuick(std::monostate, Actor* a, float x, float y, float z) {
+	if (a) {
+		if (a->Get3D()) {
+			a->data.angle.x = x;
+			a->data.angle.y = y;
+			a->data.angle.z = z;
+		}
+		else {
+			logger::warn(_MESSAGE("(SetAngleQuick) Failed to run on Actor %llx", a->formID));
+		}
+	}
+	else {
+		logger::warn(_MESSAGE("(SetAngleQuick) Actor is null"));
+	}
+}
+
 void VelocityMapCleanup() {
 	mapLock.lock();
 	velMap.clear();
@@ -260,6 +323,9 @@ bool RegisterFuncs(BSScript::IVirtualMachine* a_vm) {
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorForward", GetActorForward, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorUp", GetActorUp, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorEye", GetActorEye, false);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorAngle", GetActorAngle, false);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "SetPositionQuick", SetPositionQuick, false);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "SetAngleQuick", SetAngleQuick, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "SetVelocity", SetVelocity, true);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "IsOnGround", IsOnGroundPapyrus, false);
 	return true;
