@@ -2,8 +2,8 @@
 #include <unordered_map>
 #include <Windows.h>
 #include <vector>
-#include "MathUtils.h"
-#include "Havok.h"
+#include <MathUtils.h>
+#include <Havok.h>
 using namespace F4SE;
 #define MATH_PI 3.14159265358979323846
 #define HAVOKTOFO4 69.99124f
@@ -96,6 +96,7 @@ float lastHeight = 120.0f;
 float heightDiffThreshold = 5.0f;
 float heightBuffer = 16.0f;
 bool dynamicHeight = false;
+bool isLoading = false;
 
 #pragma endregion
 
@@ -528,29 +529,27 @@ public:
 	typedef void (LeanLookHandler::* FnOnMouseMoveEvent)(MouseMoveEvent* evn);
 	typedef void (LeanLookHandler::* FnOnThumbstickEvent)(ThumbstickEvent* evn);
 
-	std::vector<float> RotateXY(float x, float y, float rad) {
-		std::vector<float> ret{ x, y };
-		float _x = x;
-		float _y = y;
-		ret[0] = cos(rad) * _x - sin(rad) * _y;
-		ret[1] = sin(rad) * _x + cos(rad) * _y;
-		return ret;
+	void RotateXY(float x, float y, float rad, std::vector<float>& v) {
+		v.push_back(cos(rad) * x - sin(rad) * y);
+		v.push_back(sin(rad) * x + cos(rad) * y);
 	}
 
 	void HookedMouseMoveEvent(MouseMoveEvent* evn) {
 		if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson] && !leanR6Style) {
-			std::vector<float> rotated = RotateXY((float)evn->mouseInputX, (float)evn->mouseInputY, -rotZ * toRad);
-			evn->mouseInputX = (int32_t)rotated[0];
-			evn->mouseInputY = (int32_t)rotated[1];
+			std::vector<float> input;
+			RotateXY((float)evn->mouseInputX, (float)evn->mouseInputY, -rotZ * toRad, input);
+			evn->mouseInputX = (int32_t)input[0];
+			evn->mouseInputY = (int32_t)input[1];
 		}
 		(this->*mouseEvn)(evn);
 	}
 
 	void HookedThumbstickEvent(ThumbstickEvent* evn) {
 		if (evn->idCode == ThumbstickEvent::kRight && pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson] && !leanR6Style) {
-			std::vector<float> rotated = RotateXY(evn->xValue, -evn->yValue, -rotZ * toRad);
-			evn->xValue = rotated[0];
-			evn->yValue = -rotated[1];
+			std::vector<float> input;
+			RotateXY(evn->xValue, -evn->yValue, -rotZ * toRad, input);
+			evn->xValue = input[0];
+			evn->yValue = -input[1];
 		}
 		(this->*thumbstickEvn)(evn);
 	}
@@ -644,94 +643,8 @@ public:
 			if (a->currentProcess) {
 				con = a->currentProcess->middleHigh->charController.get();
 			}
-			if (con) {
-				if (tpNode) {
-					NiNode* head = (NiNode*)tpNode->GetObjectByName("HEAD");
-					if (!head)
-						head = (NiNode*)tpNode->GetObjectByName("Head");
-					if (head) {
-						float height = head->world.translate.z + heightBuffer - a->data.location.z;
-						//_MESSAGE("Current height %f", height);
-						if (bbx) {
-							float optimalHeight = bbx->extents.z * 2.0f;
-							transDist = isFP ? optimalHeight * sin(leanMax * toRad) : bbx->extents.z * sin(leanMax3rd * toRad);
-							heightRatio = height / optimalHeight;
-							//_MESSAGE("Optimal height %f", optimalHeight);
-							rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
-							if (deltaLeanWeight != 0) {
-								float ratio = (1 - cos(rotZ * toRad)) * 4.0f * (isFP + 1);
-								float signRotZ = Sign(rotZ);
-								uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
-								hknpShape* bumper = con->shapes[0]._ptr;
-								CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-								if (data && data->shape) {
-									float bumperWidthHalf = 0.257f * ratio * signRotZ;
-									ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
-								}
-								bumper = con->shapes[1]._ptr;
-								data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-								if (data && data->shape) {
-									float bumperWidthHalf = 0.307f * ratio * signRotZ;
-									if (collisionDevMode) {
-										_MESSAGE("bumperWidthHalf %f", bumperWidthHalf);
-									}
-									ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
-								}
-								if (charProxy) {
-									NiPoint3 right = CrossProduct(con->forwardVec, con->up);
-									hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
-									hkVector4f& charProxyVel = *(hkVector4f*)(charProxy + 0xA0);
-									hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
-									//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
-									float diff = DotProduct(charProxyVel - con->velocityMod, right * -deltaLeanWeight);
-									if (collisionDevMode) {
-										_MESSAGE("Diff %f", diff);
-									}
-									if (diff > leanCollisionThreshold) {
-										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
-										charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
-										if (collisionDevMode) {
-											_MESSAGE("Collision");
-											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
-										}
-									}
-									else {
-										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
-										//float& keepDistance = *(float*)(charProxy + 0xE0);
-										//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
-										charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
-										if (collisionDevMode) {
-											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
-										}
-									}
-								}
-							}
-
-							if (dynamicHeight) {
-								if (abs(height - lastHeight) > heightDiffThreshold) {
-									hknpShape* bumper = con->shapes[0]._ptr;
-									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-									if (data) {
-										data->translate.z = heightRatio - 1.0f;
-										data->scale.z = heightRatio;
-									}
-									bumper = con->shapes[1]._ptr;
-									data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-									if (data) {
-										data->translate.z = heightRatio - 1.0f;
-										data->scale.z = heightRatio;
-									}
-									//_MESSAGE("Changed height");
-									lastHeight = height;
-								}
-							}
-						}
-					}
-				}
-			}
 
 			if (tpNode) {
-				NiPoint3 colTransX = NiPoint3(transDist * leanWeight, 0, 0);
 				rotZ = leanMax3rd * leanWeight;
 				transZ = leanMax3rd * leanWeight / 3.0f;
 				float rotXRadByThree = rotX * toRad / 3.0f;
@@ -794,6 +707,99 @@ public:
 					//_MESSAGE("rlegFootInserted");
 				}
 
+				if (con) {
+					NiNode* head = (NiNode*)tpNode->GetObjectByName("HEAD");
+					if (!head)
+						head = (NiNode*)tpNode->GetObjectByName("Head");
+					if (head && spine1Inserted) {
+						float height = max(max(head->world.translate.z, spine1Inserted->world.translate.z) + heightBuffer - a->data.location.z, 2.0f);
+						//_MESSAGE("Current height %f", height);
+						if (bbx) {
+							float optimalHeight = bbx->extents.z * 2.0f;
+							transDist = isFP ? optimalHeight * sin(leanMax * toRad) : bbx->extents.z * sin(leanMax3rd * toRad);
+							heightRatio = height / optimalHeight;
+							//_MESSAGE("Optimal height %f", optimalHeight);
+							rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
+							if (deltaLeanWeight != 0) {
+								float ratio = (1 - cos(rotZ * toRad)) * 4.0f * (isFP + 1);
+								float signRotZ = Sign(rotZ);
+								uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
+								hknpShape* bumper = con->shapes[0]._ptr;
+								if (bumper) {
+									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+									if (data && data->shape) {
+										float bumperWidthHalf = 0.257f * ratio * signRotZ;
+										ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
+									}
+								}
+								bumper = con->shapes[1]._ptr;
+								if (bumper) {
+									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+									if (data && data->shape) {
+										float bumperWidthHalf = 0.307f * ratio * signRotZ;
+										if (collisionDevMode) {
+											_MESSAGE("bumperWidthHalf %f", bumperWidthHalf);
+										}
+										ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
+									}
+								}
+								if (charProxy) {
+									NiPoint3 right = CrossProduct(con->forwardVec, con->up);
+									hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+									hkVector4f& charProxyVel = *(hkVector4f*)(charProxy + 0xA0);
+									hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
+									//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
+									float diff = DotProduct(charProxyVel - con->velocityMod, right * -deltaLeanWeight);
+									if (collisionDevMode) {
+										_MESSAGE("Diff %f", diff);
+									}
+									if (diff > leanCollisionThreshold) {
+										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
+										charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
+										if (collisionDevMode) {
+											_MESSAGE("Collision");
+											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+										}
+									}
+									else {
+										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
+										//float& keepDistance = *(float*)(charProxy + 0xE0);
+										//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
+										charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
+										if (collisionDevMode) {
+											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+										}
+									}
+								}
+							}
+
+							if (dynamicHeight && !isLoading) {
+								if (abs(height - lastHeight) > heightDiffThreshold) {
+									hknpShape* bumper = con->shapes[0]._ptr;
+									if (bumper) {
+										CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+										if (data) {
+											data->translate.z = heightRatio - 0.98f;
+											data->scale.z = heightRatio;
+										}
+									}
+									bumper = con->shapes[1]._ptr;
+									if (bumper) {
+										CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
+										if (data) {
+											data->translate.z = heightRatio - 0.98f;
+											data->scale.z = heightRatio;
+										}
+									}
+									//_MESSAGE("Changed height");
+									lastHeight = height;
+								}
+							}
+						}
+					}
+				}
+
+				NiPoint3 colTransX = NiPoint3(transDist * leanWeight, 0, 0);
 				NiNode* comInserted = (NiNode*)tpNode->GetObjectByName("COMInserted");
 				if (comInserted) {
 					comInserted->local.translate = colTransX;
@@ -1028,6 +1034,20 @@ public:
 	F4_HEAP_REDEFINE_NEW(ObjectLoadWatcher);
 };
 
+class MenuWatcher : public BSTEventSink<MenuOpenCloseEvent> {
+	virtual BSEventNotifyControl ProcessEvent(const MenuOpenCloseEvent& evn, BSTEventSource<MenuOpenCloseEvent>* src) override {
+		if (evn.menuName == BSFixedString("LoadingMenu")) {
+			if (evn.opening) {
+				isLoading = true;
+			}
+			else {
+				isLoading = false;
+			}
+		}
+		return BSEventNotifyControl::kContinue;
+	}
+};
+
 #pragma endregion
 
 #pragma region Initializers
@@ -1057,6 +1077,8 @@ void InitializePlugin() {
 	ObjectLoadWatcher* olw = new ObjectLoadWatcher();
 	ObjectLoadedEventSource::GetSingleton()->RegisterSink(olw);
 	rayInterface = (CachedRaycastData*)new FakeCachedRaycastData();
+	MenuWatcher* mw = new MenuWatcher();
+	UI::GetSingleton()->GetEventSource<MenuOpenCloseEvent>()->RegisterSink(mw);
 }
 
 #pragma endregion
