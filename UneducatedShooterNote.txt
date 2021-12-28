@@ -1,0 +1,20 @@
+Fallout4.exe+34D490
+RCX WeaponData&
+WeaponData{
+	TESObjectWEAP*
+	InstanceData*
+}
+RDX Actor*
+
+
+Fallout4.exe+1DB6BC0
+RCX hknpBSWorld*
+RDX hknpRayCastQuery&
+R8 bhkNPCCollisionObject**
+R9 ?
+
+Fallout4.exe+2D057C0 CachedRaycastData : hkbSpatialQueryInterface : hkaRaycastInterface
+
+Fallout4.exe+2E433C8 bhkWorldM : bhkWorld
+
+Fallout4.exe+58D0A90 bhkWorldM**
