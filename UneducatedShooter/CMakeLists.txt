@@ -153,6 +153,10 @@ target_compile_features(
 
 #include_directories(${HAVOK_PATH})
 
+include_directories(
+		${CMAKE_CURRENT_SOURCE_DIR}/../Utilities
+)
+
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
