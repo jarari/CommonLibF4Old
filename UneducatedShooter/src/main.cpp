@@ -51,8 +51,7 @@ REL::Relocation<hknpShapeTagCodec*> ptr_shapeTagCodec{ REL::ID(322467) };
 REL::Relocation<hknpCollisionFilter*> ptr_collisionFilter{ REL::ID(246130) };
 REL::Relocation<bhkWorld**> ptr_bhkWorldM{ REL::ID(128691) };
 CachedRaycastData* rayInterface;
-vector<hkVector4f> cachedShape0;
-vector<hkVector4f> cachedShape1;
+vector<hkVector4f> cachedShape[5];
 CSimpleIniA ini(true, true, false);
 PlayerCharacter* p;
 PlayerCamera* pcam;
@@ -83,6 +82,8 @@ float leanTimeCost = 1.0f;
 float leanMax = 15.0f;
 float leanMax3rd = 30.0f;
 float leanCollisionThreshold = 0.08f;
+float leanDistMoved;
+NiPoint3 leanLastDir;
 bool toggleLean = false;
 uint32_t leanLeft = 0x51;
 uint32_t leanRight = 0x45;
@@ -260,6 +261,36 @@ float Sign(float f) {
 	return abs(f) / f;
 }
 
+enum NiAVObjectFlag {
+	kNone = 0,
+	kHidden = 1 << 0,
+	kSelectiveUpdate = 1 << 1,
+	kSelectiveUpdateTransforms = 1 << 2,
+	kSelectiveUpdateController = 1 << 3,
+	kSelectiveUpdateRigid = 1 << 4,
+	kDisplayObject = 1 << 5,
+	kDisableSorting = 1 << 6,
+	kSelectiveUpdateTransformsOverride = 1 << 7,
+	kSaveExternalGeometryData = 1 << 9,
+	kNoDecals = 1 << 10,
+	kAlwaysDraw = 1 << 11,
+	kMeshLOD = 1 << 12,
+	kFixedBound = 1 << 13,
+	kTopFadeNode = 1 << 14,
+	kIgnoreFade = 1 << 15,
+	kNoAnimSyncX = 1 << 16,
+	kNoAnimSyncY = 1 << 17,
+	kNoAnimSyncZ = 1 << 18,
+	kNoAnimSyncS = 1 << 19,
+	kNoDismember = 1 << 20,
+	kNoDismemberValidity = 1 << 21,
+	kRenderUse = 1 << 22,
+	kMaterialsApplied = 1 << 23,
+	kHighDetail = 1 << 24,
+	kForceUpdate = 1 << 25,
+	kPreProcessedNode = 1 << 26
+};
+
 #pragma endregion
 
 #pragma region Functions
@@ -298,7 +329,7 @@ void LoadConfigs() {
 void PreparePlayerSkeleton(NiNode* node) {
 	NiAVObject* fpNode = p->Get3D(true);
 	if (node == fpNode) {
-		_MESSAGE("First person skeleton found.");
+		//_MESSAGE("First person skeleton found.");
 		NiNode* chestInserted = (NiNode*)fpNode->GetObjectByName("ChestInserted1st");
 		NiNode* chest = (NiNode*)fpNode->GetObjectByName("Chest");
 		if (!chestInserted) {
@@ -334,7 +365,7 @@ void PreparePlayerSkeleton(NiNode* node) {
 	}
 	NiAVObject* tpNode = p->Get3D(false);
 	if (node == tpNode) {
-		_MESSAGE("Third person skeleton found.");
+		//_MESSAGE("Third person skeleton found.");
 		NiNode* comInserted = (NiNode*)tpNode->GetObjectByName("COMInserted");
 		NiNode* com = (NiNode*)tpNode->GetObjectByName("COM");
 		if (!comInserted) {
@@ -425,20 +456,21 @@ void PreparePlayerSkeleton(NiNode* node) {
 	}
 }
 
-void ResizeCollisionShapeX(CompoundShapeData* data, vector<hkVector4f>& cachedShape, float ratio, float bumperHalf) {
-	uintptr_t polytopeShape = (uintptr_t)data->shape;
-	uint16_t vertexSize = *(uint16_t*)(polytopeShape + 0x30);
-	uint16_t vertexOffset = *(uint16_t*)(polytopeShape + 0x32);
-	*(float*)((uintptr_t)data + 0x80) = -bumperHalf;
-	*(float*)((uintptr_t)data + 0x90) = bumperHalf;
-	if (cachedShape.size() == 0) {
+void ResizeCollisionPolytopeShapeX(hknpShape* shape, vector<hkVector4f>& cache, float ratio, float bumperHalf, float bumperDiff) {
+	uint16_t vertexSize = *(uint16_t*)((uintptr_t)shape + 0x30);
+	uint16_t vertexOffset = *(uint16_t*)((uintptr_t)shape + 0x32);
+	if (cache.size() == 0) {
 		for (int i = 0; i < vertexSize; ++i) {
-			cachedShape.push_back(*(hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i));
+			cache.push_back(*(hkVector4f*)((uintptr_t)shape + 0x30 + vertexOffset + 0x10 * i));
 		}
 	}
-	for (int i = 0; i < cachedShape.size(); ++i) {
-		((hkVector4f*)(polytopeShape + 0x30 + vertexOffset + 0x10 * i))->x = cachedShape[i].x * ratio - bumperHalf;
+	for (int i = 0; i < cache.size(); ++i) {
+		((hkVector4f*)((uintptr_t)shape + 0x30 + vertexOffset + 0x10 * i))->x = cache[i].x + cache[i].x * ratio + bumperDiff;
 	}
+}
+
+void ResizeCollisionShapeX(CompoundShapeData* data, vector<hkVector4f>& cache, float ratio, float bumperHalf, float bumperDiff) {
+	ResizeCollisionPolytopeShapeX(data->shape, cache, ratio, bumperHalf, bumperDiff);
 }
 
 /*void castRay_Internal(hknpRayCastQuery& query, hknpShape* targetShape, hkTransform& targetShapeTransform, hknpCollisionQueryCollector* collector) {
@@ -581,6 +613,7 @@ public:
 			NiAVObject* tpNode = a->Get3D(false);
 			if (node != lastRoot) {
 				bbx = (BSBound*)tpNode->GetExtraData("BBX");
+				//_MESSAGE("tpNode %llx", tpNode);
 				lastRoot = node->IsNode();
 				PreparePlayerSkeleton(lastRoot);
 			}
@@ -630,7 +663,12 @@ public:
 				}
 			}
 			float deltaLeanWeight = leanTime / leanTimeCost - leanWeight;
+			if ((leanWeight + deltaLeanWeight > 0 && leanWeight <= 0)
+				|| (leanWeight + deltaLeanWeight < 0 && leanWeight >= 0)) {
+				leanDistMoved = 0;
+			}
 			leanWeight += deltaLeanWeight;
+
 
 			float pcScale = GetActorScale(p);
 			float heightRatio = 1;
@@ -645,6 +683,29 @@ public:
 			}
 
 			if (tpNode) {
+				/*if (node != tpNode) {
+					Visit(tpNode, [&](NiAVObject* obj) {
+						if (obj->name == "Neck" || obj->name == "LArm_Collarbone" || obj->name == "RArm_Collarbone") {
+							NiNode* node = obj->IsNode();
+							if (node) {
+								node->local.scale = 0.001f;
+							}
+						}
+						return false;
+					});
+					node->flags.flags &= ~NiAVObjectFlag::kHidden;
+				}
+				else {
+					Visit(tpNode, [&](NiAVObject* obj) {
+						if (obj->name == "Neck" || obj->name == "LArm_Collarbone" || obj->name == "RArm_Collarbone") {
+							NiNode* node = obj->IsNode();
+							if (node) {
+								node->local.scale = 1;
+							}
+						}
+						return false;
+					});
+				}*/
 				rotZ = leanMax3rd * leanWeight;
 				transZ = leanMax3rd * leanWeight / 3.0f;
 				float rotXRadByThree = rotX * toRad / 3.0f;
@@ -716,33 +777,63 @@ public:
 						//_MESSAGE("Current height %f", height);
 						if (bbx) {
 							float optimalHeight = bbx->extents.z * 2.0f;
-							transDist = isFP ? optimalHeight * sin(leanMax * toRad) : bbx->extents.z * sin(leanMax3rd * toRad);
 							heightRatio = height / optimalHeight;
+							transDist = isFP ? optimalHeight * sin(leanMax * toRad) : bbx->extents.z * sin(leanMax3rd * toRad);
 							//_MESSAGE("Optimal height %f", optimalHeight);
 							rotZ = isFP ? leanMax * leanWeight : leanMax3rd * leanWeight;
 							if (deltaLeanWeight != 0) {
-								float ratio = (1 - cos(rotZ * toRad)) * 4.0f * (isFP + 1);
+								if (collisionDevMode) {
+									_MESSAGE("transDist %f", transDist);
+								}
+								float ratio = isFP ? abs(optimalHeight * sin(rotZ * toRad)) : abs(bbx->extents.z * sin(rotZ * toRad));
+								ratio = max(ratio / (0.307f * HAVOKTOFO4), 1);
 								float signRotZ = Sign(rotZ);
 								uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con + 0x470);
-								hknpShape* bumper = con->shapes[0]._ptr;
-								if (bumper) {
-									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-									if (data && data->shape) {
-										float bumperWidthHalf = 0.257f * ratio * signRotZ;
-										ResizeCollisionShapeX(data, cachedShape0, ratio, bumperWidthHalf);
-									}
-								}
-								bumper = con->shapes[1]._ptr;
-								if (bumper) {
-									CompoundShapeData* data = *(CompoundShapeData**)((uintptr_t)bumper + 0x60);
-									if (data && data->shape) {
-										float bumperWidthHalf = 0.307f * ratio * signRotZ;
+								/*hknpShape* colShape = con->shapes[0]._ptr;
+								if (colShape) {
+									float bumperWidthHalf = 0.257f;
+									if (colShape->GetType() == hknpShapeType::Enum::kCapsule) {
 										if (collisionDevMode) {
-											_MESSAGE("bumperWidthHalf %f", bumperWidthHalf);
+											_MESSAGE("Shape 0 Capsule");
 										}
-										ResizeCollisionShapeX(data, cachedShape1, ratio, bumperWidthHalf);
+										ResizeCollisionPolytopeShapeX(colShape, cachedShape[0], ratio, bumperWidthHalf, bumperWidthHalf * ratio * signRotZ);
+									}
+									else {
+										if (collisionDevMode) {
+											_MESSAGE("Shape 0 Compound");
+										}
+										MultiCompoundShape* multiShape = *(MultiCompoundShape**)((uintptr_t)colShape + 0x60);
+										if (multiShape) {
+											int32_t numShape = *(int32_t*)((uintptr_t)colShape + 0x68);
+											for (int i = 0; i < numShape; ++i) {
+												ResizeCollisionShapeX(&(multiShape->data[i]), cachedShape[i], ratio, bumperWidthHalf, bumperWidthHalf * ratio * signRotZ);
+											}
+										}
+									}
+								}*/
+								hknpShape* colShape = con->shapes[1]._ptr;
+								if (colShape) {
+									MultiCompoundShape* multiShape = *(MultiCompoundShape**)((uintptr_t)colShape + 0x60);
+									if (multiShape) {
+										int32_t numShape = *(int32_t*)((uintptr_t)colShape + 0x68);
+										for (int i = 0; i < numShape; ++i) {
+											multiShape->data[i].translate.x = (ratio - 1) * signRotZ / 2;
+											multiShape->data[i].scale.x = ratio;
+										}
+									}
+									hknpDynamicCompoundShapeData* shapeData = *(hknpDynamicCompoundShapeData**)((uintptr_t)colShape + 0xC0);
+									if (shapeData) {
+										if (cachedShape[4].size() == 0) {
+											for (int i = 0; i < 8; ++i) {
+												cachedShape[4].push_back(shapeData->bbv->vertex[i]);
+											}
+										}
+										for (int i = 0; i < cachedShape[4].size(); ++i) {
+											shapeData->bbv->vertex[i].x = cachedShape[4][i].x * ratio;
+										}
 									}
 								}
+
 								if (charProxy) {
 									NiPoint3 right = CrossProduct(con->forwardVec, con->up);
 									hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
@@ -750,24 +841,56 @@ public:
 									hkVector4f& charProxyLastDisplacement = *(hkVector4f*)(charProxy + 0xB0);
 									//_MESSAGE("Length %f", (charProxyLastDisplacement - charProxyVel * con->stepInfo.deltaTime.storage).Length());
 									float diff = DotProduct(charProxyVel - con->velocityMod, right * -deltaLeanWeight);
+									float deltaDist = transDist * deltaLeanWeight / HAVOKTOFO4;
 									if (collisionDevMode) {
 										_MESSAGE("Diff %f", diff);
 									}
-									if (diff > leanCollisionThreshold) {
-										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
-										charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
-										if (collisionDevMode) {
-											_MESSAGE("Collision");
-											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+									if (deltaDist * leanDistMoved >= 0) {
+										leanLastDir = right;
+										if (diff > leanCollisionThreshold) {
+											//hkVector4f displacement = right * deltaDist;
+											//charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
+											if (collisionDevMode) {
+											//	_MESSAGE("Collision Detected Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+											}
+										}
+										else {
+											hkVector4f displacement = right * deltaDist;
+											//float& keepDistance = *(float*)(charProxy + 0xE0);
+											//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
+											charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
+											leanDistMoved += deltaDist;
+											if (collisionDevMode) {
+												_MESSAGE("Safe to translate Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+											}
 										}
 									}
 									else {
-										hkVector4f displacement = right * transDist * deltaLeanWeight / HAVOKTOFO4;
-										//float& keepDistance = *(float*)(charProxy + 0xE0);
-										//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
-										charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
-										if (collisionDevMode) {
-											_MESSAGE("Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+										if (abs(leanDistMoved) > 0) {
+											leanDistMoved += deltaDist;
+											/*hkVector4f displacement = leanLastDir * deltaDist;
+											charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
+											if (collisionDevMode) {
+												_MESSAGE("Reverting to original %f %f %f", displacement.x, displacement.y, displacement.z);
+											}*/
+
+											if (diff > leanCollisionThreshold) {
+												//hkVector4f displacement = right * deltaDist;
+												//charProxyTransform->m_translation = charProxyTransform->m_translation - displacement;
+												if (collisionDevMode) {
+													//	_MESSAGE("Collision Detected Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+												}
+											}
+											else {
+												hkVector4f displacement = isFP ? leanLastDir * deltaDist : right * deltaDist;
+												//float& keepDistance = *(float*)(charProxy + 0xE0);
+												//*charProxyVel = *charProxyVel + right * translateDist * deltaLeanWeight / HAVOKTOFO4;
+												charProxyTransform->m_translation = charProxyTransform->m_translation + displacement;
+												leanDistMoved += deltaDist;
+												if (collisionDevMode) {
+													_MESSAGE("Reverting to original Displacement %f %f %f", displacement.x, displacement.y, displacement.z);
+												}
+											}
 										}
 									}
 								}
@@ -846,9 +969,11 @@ public:
 						NiPoint3 zoomData = NiPoint3();
 						if (p->currentProcess && p->currentProcess->middleHigh) {
 							BSTArray<EquippedItem> equipped = p->currentProcess->middleHigh->equippedItems;
-							if (equipped.size() != 0 && equipped[0].item.instanceData &&
-								((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->type == 9) {
-								zoomData = ((TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get())->zoomData->zoomData.cameraOffset;
+							if (equipped.size() != 0 && equipped[0].item.instanceData) {
+								TESObjectWEAP::InstanceData* instance = (TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get();
+								if (instance->type == 9 && instance->zoomData) {
+									zoomData = instance->zoomData->zoomData.cameraOffset;
+								}
 							}
 						}
 						NiPoint3 camPos = camera->local.translate + zoomData;

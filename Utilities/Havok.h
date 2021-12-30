@@ -16,28 +16,38 @@ namespace RE {
 	struct hknpTriangleShape;
 	struct hknpPhysicsSystemData;
 	struct hknpWorld;
-	/*class hknpPhysicsSystem : public hkReferencedObject {
-	public:
-		hknpPhysicsSystemData*	m_data;
-		hknpWorld* m_world;
-	}
 
-	class __declspec(novtable) bhkPhysicsSystem : 
+	class hknpPhysicsSystem : 
+		public hkReferencedObject {
+	public:
+		hknpPhysicsSystemData* m_data;
+		hknpWorld* m_world;
+	};
+
+	class bhkPhysicsSystem : 
 		public NiObject {
 	public:
-		static constexpr auto RTTI{ RTTI::bhkPhysicsSystem };
-		static constexpr auto VTABLE{ VTABLE::bhkPhysicsSystem };
-		static constexpr auto Ni_RTTI{ Ni_RTTI::bhkPhysicsSystem };
-
 		hknpPhysicsSystemData* physicsSystemData;
 		hknpPhysicsSystem* physicsSystem;
-	};*/
+	};
 
-	struct CompoundShapeData {
+	struct BoundingBoxVolume {
+		hkVector4f vertex[8];
+	};
+
+	struct hknpDynamicCompoundShapeData : hkReferencedObject {
+		BoundingBoxVolume* bbv;
+	};
+
+	struct alignas(0x80) CompoundShapeData {
 		hkVector4f rotation[3];
 		hkVector4f translate;
 		hkVector4f scale;
 		hknpShape* shape;
+	};
+
+	struct MultiCompoundShape {
+		CompoundShapeData data[3];
 	};
 
 	struct unkParam {
