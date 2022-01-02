@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <vector>
 #include <MathUtils.h>
+#include <Havok.h>
 #define HAVOKtoFO4 69.99124f
 using namespace RE;
 using std::unordered_map;
@@ -23,6 +24,7 @@ class VelocityData {
 public:
 	float x, y, z, duration, stepX, stepY, stepZ, lastRun;
 	bool gravity = false;
+	bool additive = false;
 	const static float stepTime;
 	VelocityData() {
 		x = 0.0f;
@@ -35,23 +37,11 @@ public:
 	}
 };
 
-namespace RE {
-	class hkTransformf {
-	public:
-		void setIdentity() {
-			m_rotation.MakeIdentity();
-			m_translation = hkVector4f();
-		}
-		NiMatrix3 m_rotation;
-		hkVector4f m_translation;
-	};
-	typedef hkTransformf hkTransform;
-}
-
 REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
 const float VelocityData::stepTime = 0.016667f;
 unordered_map<Actor*, VelocityData> velMap;
 unordered_map<Actor*, VelocityData> queueMap;
+PlayerCharacter* p;
 BSSpinLock mapLock;
 Setting* charGravity;
 
@@ -71,43 +61,77 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 	return olddata;
 }
 
+bool IsOnGround(bhkCharacterController* con) {
+	return (con->flags & 0x100) == 0x100;
+}
+
 bool IsOnGround(Actor* a) {
 	if (!a->currentProcess || !a->currentProcess->middleHigh)
 		return false;
 	NiPointer<bhkCharacterController> con = a->currentProcess->middleHigh->charController;
 	if (!con.get())
 		return false;
-	return (con->flags & 0x100) == 0x100;
+	return IsOnGround(con.get());
 }
 
-float ApplyVelocity(Actor* a, VelocityData& vd, bool gravity = false, bool modifyState = false) {
+float ApplyVelocity(Actor* a, VelocityData& vd, bool modifyState = false) {
 	if (!a->currentProcess || !a->currentProcess->middleHigh)
 		return 0;
 	NiPointer<bhkCharacterController> con = a->currentProcess->middleHigh->charController;
 	if (!con.get())
 		return 0;
 	float deltaTime = *ptr_engineTime - vd.lastRun;
-	if (gravity) {
-		if ((con->flags & 0x100) != 0x100) {
-			vd.z -= con->gravity * charGravity->GetFloat() * 9.81f * deltaTime / VelocityData::stepTime;
+	if (vd.additive) {
+		if (con) {
+			uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con.get() + 0x470);
+			if (charProxy) {
+				con->velocityMod = hkVector4f(vd.x, vd.y, vd.z) * HAVOKtoFO4;
+				if (IsOnGround(a)) {
+					hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+					charProxyTransform->m_translation.z += 0.5f;
+				}
+				else {
+					hkVector4f* charProxyVel = (hkVector4f*)(charProxy + 0xA0);
+					charProxyVel->x += vd.x;
+					charProxyVel->y += vd.y;
+					charProxyVel->z += vd.z;
+					vd.x = 0;
+					vd.y = 0;
+					vd.z = 0;
+					con->context.currentState = hknpCharacterState::hknpCharacterStateType::kInAir;
+					con->flags &= 0xFFFFF8FF;
+				}
+				//_MESSAGE("Actor %llx Controller %llx x %f y % f z %f onGround %d", a, con.get(), vd.x, vd.y, vd.z, (con->flags & 0x100) == 0x100);
+			}
 		}
-	}
-	//_MESSAGE("Actor %llx Controller %llx x %f y % f z %f onGround %d", a, con.get(), vd.x, vd.y, vd.z, (con->flags & 0x100) == 0x100);
-	con->velocityMod = hkVector4f(vd.x, vd.y, vd.z);
-	con->flags = con->flags & ~((uint64_t)0xFF00) | (uint64_t)0x8700; //Jetpack flag?
-	con->velocityTime = con->stepInfo.deltaTime.storage;
-
-	if (modifyState) {
-		con->context.currentState = hknpCharacterState::hknpCharacterStateType::kSwimming;
 	}
 	else {
-		if (con->context.currentState == hknpCharacterState::hknpCharacterStateType::kOnGround) {
-			NiPoint3A pos = a->data.location;
-			pos.z += 40.0f;
-			a->data.location = pos;
-			a->UpdateActor3DPosition();
+		if (vd.gravity) {
+			if (!IsOnGround(con.get())) {
+				vd.z -= con->gravity * charGravity->GetFloat() * 9.81f * deltaTime / VelocityData::stepTime;
+			}
+		}
+		//_MESSAGE("Actor %llx Controller %llx x %f y % f z %f onGround %d", a, con.get(), vd.x, vd.y, vd.z, (con->flags & 0x100) == 0x100);
+		con->velocityMod = hkVector4f(vd.x, vd.y, vd.z);
+		con->velocityTime = con->stepInfo.deltaTime.storage;
+		vd.x += vd.stepX * deltaTime / VelocityData::stepTime;
+		vd.y += vd.stepY * deltaTime / VelocityData::stepTime;
+		vd.z += vd.stepZ * deltaTime / VelocityData::stepTime;
+		con->flags = con->flags & ~((uint32_t)0xFF00) | (uint32_t)0x8700;
+		if (modifyState) {
+			con->context.currentState = hknpCharacterState::hknpCharacterStateType::kSwimming;
+		}
+		else {
+			if (con->context.currentState == hknpCharacterState::hknpCharacterStateType::kOnGround) {
+				NiPoint3A pos = a->data.location;
+				pos.z += 40.0f;
+				a->data.location = pos;
+				a->UpdateActor3DPosition();
+			}
 		}
 	}
+	vd.duration -= deltaTime;
+
 	vd.lastRun = *ptr_engineTime;
 	return deltaTime;
 }
@@ -118,7 +142,7 @@ public:
 
 	BSEventNotifyControl HookedProcessEvent(bhkCharacterMoveFinishEvent& evn, BSTEventSource<bhkCharacterMoveFinishEvent>* src) {
 		Actor* a = (Actor*)((uintptr_t)this - 0x150);
-		if (a->loadedData) {
+		if (a && a->loadedData) {
 			mapLock.lock();
 			auto result = velMap.find(a);
 			if (result != velMap.end()) {
@@ -127,9 +151,16 @@ public:
 					auto qresult = queueMap.find(a);
 					if (qresult != queueMap.end()) {
 						VelocityData& queueData = qresult->second;
-						data.x = queueData.x;
-						data.y = queueData.y;
-						data.z = queueData.z;
+						if (queueData.additive) {
+							data.x += queueData.x;
+							data.y += queueData.y;
+							data.z += queueData.z;
+						}
+						else {
+							data.x = queueData.x;
+							data.y = queueData.y;
+							data.z = queueData.z;
+						}
 						data.duration = queueData.duration;
 						data.stepX = queueData.stepX;
 						data.stepY = queueData.stepY;
@@ -137,17 +168,21 @@ public:
 						queueMap.erase(a);
 					}
 					if (data.duration < 0) {
-						/*if (IsOnGround(a)) {
-							a->NotifyAnimationGraphImpl("jumpLand");
-						}*/
+						int32_t iSyncJumpState = 0;
+						a->GetGraphVariableImplInt("iSyncJumpState", iSyncJumpState);
+						if (iSyncJumpState > 0) {
+							if (IsOnGround(a)) {
+								a->NotifyAnimationGraphImpl("jumpLand");
+							}
+							else {
+								NiPointer<bhkCharacterController> con = a->currentProcess->middleHigh->charController;
+								con->context.currentState = hknpCharacterState::hknpCharacterStateType::kInAir;
+							}
+						}
 						velMap.erase(result);
 					}
 					else {
-						float deltaTime = ApplyVelocity(a, data, data.gravity, true);
-						data.x += data.stepX * deltaTime / VelocityData::stepTime;
-						data.y += data.stepY * deltaTime / VelocityData::stepTime;
-						data.z += data.stepZ * deltaTime / VelocityData::stepTime;
-						data.duration -= deltaTime;
+						ApplyVelocity(a, data, true);
 					}
 				}
 				else {
@@ -223,6 +258,19 @@ std::vector<float> GetActorEye(std::monostate, Actor* a, bool includeCamOffset) 
 	return result;
 }
 
+std::vector<float> GetActorVelocity(std::monostate, Actor* a) {
+	std::vector<float> result = std::vector<float>({ 0, 0, 0 });
+	if (!a->currentProcess || !a->currentProcess->middleHigh)
+		return result;
+	NiPointer<bhkCharacterController> con = a->currentProcess->middleHigh->charController;
+	if (con.get()) {
+		result[0] = con->velocityMod.x;
+		result[1] = con->velocityMod.x;
+		result[2] = con->velocityMod.z;
+	}
+	return result;
+}
+
 extern "C" DLLEXPORT void F4SEAPI SetVelocity(std::monostate, Actor * a, float x, float y, float z, float dur, float x2, float y2, float z2, bool grav = false) {
 	if (!a || !a->Get3D())
 		return;
@@ -254,6 +302,36 @@ extern "C" DLLEXPORT void F4SEAPI SetVelocity(std::monostate, Actor * a, float x
 		data.stepY = (y2 - y) / (dur / VelocityData::stepTime);
 		data.stepZ = (z2 - z) / (dur / VelocityData::stepTime);
 		data.gravity = grav;
+		data.lastRun = *ptr_engineTime;
+		velMap.insert(std::pair<Actor*, VelocityData>(a, data));
+	}
+	mapLock.unlock();
+}
+
+extern "C" DLLEXPORT void F4SEAPI AddVelocity(std::monostate, Actor * a, float x, float y, float z) {
+	if (!a || !a->Get3D())
+		return;
+	mapLock.lock();
+	auto it = velMap.find(a);
+	if (it != velMap.end()) {
+		//logger::warn(_MESSAGE("Actor found on the map. Inserting queue"));
+		VelocityData data = it->second;
+		data.x = x / HAVOKtoFO4;
+		data.y = y / HAVOKtoFO4;
+		data.z = z / HAVOKtoFO4;
+		data.duration = 0.1f;
+		data.additive = true;
+		data.lastRun = *ptr_engineTime;
+		queueMap.insert(std::pair<Actor*, VelocityData>(a, data));
+	}
+	else {
+		//logger::warn(_MESSAGE("Actor not found on the map. Creating data"));
+		VelocityData data = VelocityData();
+		data.x = x / HAVOKtoFO4;
+		data.y = y / HAVOKtoFO4;
+		data.z = z / HAVOKtoFO4;
+		data.duration = 0.1f;
+		data.additive = true;
 		data.lastRun = *ptr_engineTime;
 		velMap.insert(std::pair<Actor*, VelocityData>(a, data));
 	}
@@ -324,20 +402,25 @@ bool RegisterFuncs(BSScript::IVirtualMachine* a_vm) {
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorUp", GetActorUp, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorEye", GetActorEye, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorAngle", GetActorAngle, false);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "GetActorVelocity", GetActorVelocity, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "SetPositionQuick", SetPositionQuick, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "SetAngleQuick", SetAngleQuick, false);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "SetVelocity", SetVelocity, true);
+	a_vm->BindNativeMethod("ActorVelocityFramework", "AddVelocity", AddVelocity, true);
 	a_vm->BindNativeMethod("ActorVelocityFramework", "IsOnGround", IsOnGroundPapyrus, false);
 	return true;
 }
 
 void InitializePlugin() {
-	uint64_t PCVtable = REL::Relocation<uint64_t>{ PlayerCharacter::VTABLE[13] }.address();
+	uint64_t PCVtable = REL::Relocation<uint64_t>{PlayerCharacter::VTABLE[13]}.address();
 	uint64_t ActorVtable = REL::Relocation<uint64_t>{ Actor::VTABLE[13] }.address();
 	CharacterMoveEventWatcher* PCWatcher = new CharacterMoveEventWatcher();
 	CharacterMoveEventWatcher* ActorWatcher = new CharacterMoveEventWatcher();
 	PCWatcher->HookSink(PCVtable);
 	ActorWatcher->HookSink(ActorVtable);
+	p = PlayerCharacter::GetSingleton();
+	//WorldUpdateWatcher* world = (WorldUpdateWatcher * )(**ptr_bhkWorldM);
+	//world->HookSink();
 	for (auto it = INISettingCollection::GetSingleton()->settings.begin(); it != INIPrefSettingCollection::GetSingleton()->settings.end(); ++it) {
 		if (strcmp((*it)->_key, "fInAirFallingCharGravityMult:Havok") == 0) {
 			charGravity = *it;

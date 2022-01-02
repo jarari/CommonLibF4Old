@@ -16,6 +16,15 @@ namespace RE {
 	struct hknpTriangleShape;
 	struct hknpPhysicsSystemData;
 	struct hknpWorld;
+	class bhkCharProxyController;
+
+	struct CollisionResult {
+		hkVector4f pos;
+		hkVector4f normal;
+		float unk20[3];
+		uint32_t materialID; //??
+		float unk30[4];
+	};
 
 	class hknpPhysicsSystem : 
 		public hkReferencedObject {
@@ -572,4 +581,9 @@ namespace RE {
 		/// Set to true if the two triangle shapes were passed in from the outside.
 		uint32_t m_externallyAllocatedTriangles;
 	};
+
+
+	REL::Relocation<hknpShapeTagCodec*> ptr_shapeTagCodec{ REL::ID(322467) };
+	REL::Relocation<hknpCollisionFilter*> ptr_collisionFilter{ REL::ID(246130) };
+	REL::Relocation<bhkWorld***> ptr_bhkWorldM{ REL::ID(128691) };
 }

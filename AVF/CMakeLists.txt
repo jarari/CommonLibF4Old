@@ -104,6 +104,10 @@ add_library(
 	.clang-format
 )
 
+include_directories(
+		${CMAKE_CURRENT_SOURCE_DIR}/../Utilities
+)
+
 target_compile_definitions(
 	${PROJECT_NAME}
 	PRIVATE
