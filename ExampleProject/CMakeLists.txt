@@ -116,6 +116,10 @@ target_compile_features(
 		cxx_std_20
 )
 
+include_directories(
+		${CMAKE_CURRENT_SOURCE_DIR}/../Utilities
+)
+
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
