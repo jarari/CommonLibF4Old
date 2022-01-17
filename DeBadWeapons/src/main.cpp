@@ -173,6 +173,8 @@ std::unordered_map<std::string, CartridgeData> cartridgeData;
 std::vector<uint32_t> deathmarkMGEFs;
 ActorValueInfo* helmetTier;
 ActorValueInfo* vestTier;
+ActorValueInfo* ActorTorsoDeathAvoid;
+ActorValueInfo* ActorHeadDeathAvoid;
 ActorValueInfo* deathmarked;
 ActorValueInfo* lasthitpart;
 ActorValueInfo* perceptionCondition;
@@ -395,8 +397,12 @@ void SetupArmors() {
 
 	helmetTier = GetAVIFByEditorID("EFD_Helmet_Tier");
 	vestTier = GetAVIFByEditorID("EFD_Vest_Tier");
+	ActorTorsoDeathAvoid = GetAVIFByEditorID("EFD_TorsoDeathAvoid");
+	ActorHeadDeathAvoid = GetAVIFByEditorID("EFD_HeadDeathAvoid");
 	_MESSAGE("EFD_Helmet_Tier %llx", helmetTier);
 	_MESSAGE("EFD_Vest_Tier %llx", vestTier);
+	_MESSAGE("EFD_Vest_Tier %llx", ActorTorsoDeathAvoid);
+	_MESSAGE("EFD_Vest_Tier %llx", ActorHeadDeathAvoid);
 
 	/*TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESObjectARMO*> armors = dh->GetFormArray<TESObjectARMO>();
@@ -900,6 +906,14 @@ public:
 									if (hasDeathChance) {
 										ActorValueInfo* avif = isTorso ? vestTier : helmetTier;
 										uint16_t chance = cdlookup->second.protectionChances[(int)a->GetActorValue(*avif)];
+										uint16_t original_chance = chance;
+
+										if (isTorso) {
+											chance += a->GetActorValue(*ActorTorsoDeathAvoid);
+										} else if (!isTorso) {
+											chance += a->GetActorValue(*ActorHeadDeathAvoid);
+										}
+
 										if (isTorso && a->GetActorValue(*enduranceCondition) == 0) {
 											chance = 0;
 										}
@@ -909,7 +923,7 @@ public:
 										std::mt19937 e{ rd() }; // or std::default_random_engine e{rd()};
 										std::uniform_int_distribution<uint16_t> dist{ 1, 100 };
 										uint16_t result = dist(e);
-										_MESSAGE("Protection Chance %d result %d", chance, result);
+										_MESSAGE("Original Protection Chance %d TorsoDeathAvoidValue %d HeadDeathAvoidValue %d chance %d result %d", original_chance, (uint16_t)a->GetActorValue(*ActorTorsoDeathAvoid), (uint16_t)a->GetActorValue(*ActorHeadDeathAvoid), chance, result);
 										if (result > chance) {
 											killDeathMarked->Cast(evn.caster.get(), a);
 											if (*ptr_engineTime - lastDeathMarkSoundTime > 0.01f && a->Get3D()) {
