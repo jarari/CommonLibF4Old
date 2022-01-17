@@ -59,6 +59,7 @@ CharacterMoveFinishEventWatcher* PCWatcher;
 ActorValueInfo* rightAttackCondition;
 ActorValueInfo* leftAttackCondition;
 float rotX, rotY, rotZ, transZ;
+float targetRotX, targetRotY;
 float rotLimitX = 10.0f;
 float rotLimitY = 5.0f;
 float rotDivX = 10.0f;
@@ -82,6 +83,8 @@ float leanCollisionThreshold = 0.08f;
 float leanDistMoved;
 NiPoint3 leanLastDir;
 bool toggleLean = false;
+bool disableLean = false;
+bool vanillaPeekPatched = false;
 uint32_t leanLeft = 0x51;
 uint32_t leanRight = 0x45;
 bool leanADSOnly = false;
@@ -305,6 +308,7 @@ void LoadConfigs() {
 	rotReturnDivMin = std::stof(ini.GetValue("Inertia", "rotReturnDivMin", "1.05"));
 	rotReturnStep = std::stof(ini.GetValue("Inertia", "rotReturnStep", "0.0"));
 	rotDisableInADS = std::stoi(ini.GetValue("Inertia", "rotDisableInADS", "0")) > 0;
+	disableLean = std::stoi(ini.GetValue("Leaning", "leanDisable", "0")) > 0;
 	leanTimeCost = std::stof(ini.GetValue("Leaning", "leanTimeCost", "1.0"));
 	leanMax = std::stof(ini.GetValue("Leaning", "leanMax", "15.0"));
 	leanMax3rd = std::stof(ini.GetValue("Leaning", "leanMax3rd", "30.0"));
@@ -321,6 +325,18 @@ void LoadConfigs() {
 	buttonDevMode = std::stoi(ini.GetValue("Dev", "buttonDevMode", "0")) > 0;
 	iniDevMode = std::stoi(ini.GetValue("Dev", "iniDevMode", "0")) > 0;
 	ini.Reset();
+
+	if (!vanillaPeekPatched && !disableLean) {
+		uint8_t bytes[] = { 0xE9, 0x1C, 0x06, 0x00, 0x00, 0x90 };
+		REL::safe_write<uint8_t>(ptr_ADS_DistanceCheck.address(), std::span{ bytes });
+		for (auto it = GameSettingCollection::GetSingleton()->settings.begin(); it != GameSettingCollection::GetSingleton()->settings.end(); ++it) {
+			if (it->first == "fPlayerCoverPeekTime") {
+				it->second->SetFloat(0.0f);
+				_MESSAGE("%s changed to %f", it->first.c_str(), it->second->_value);
+			}
+		}
+		vanillaPeekPatched = true;
+	}
 }
 
 void PreparePlayerSkeleton(NiNode* node) {
@@ -538,8 +554,9 @@ public:
 	void CalculateXY(float x, float y, float divX, float divY) {
 		if (UI::GetSingleton()->menuMode || UI::GetSingleton()->GetMenuOpen("CursorMenu"))
 			return;
-		rotX = max(min(rotX + x / divX, rotLimitX), -rotLimitX);
-		rotY = max(min(rotY + y / divY, rotLimitY), -rotLimitY);
+		targetRotX = max(min(targetRotX + x / divX, rotLimitX), -rotLimitX);
+		targetRotY = max(min(targetRotY + y / divY, rotLimitY), -rotLimitY);
+		//_MESSAGE("input received x %f y %f", x / divX, y / divY);
 	}
 
 	virtual void OnMouseMoveEvent(const MouseMoveEvent* evn) {
@@ -640,7 +657,8 @@ public:
 				UI* ui = UI::GetSingleton();
 				if (ui->GetMenuOpen("WorkshopMenu")
 					|| ui->GetMenuOpen("DialogueMenu")
-					|| a->interactingState != INTERACTING_STATE::kNotInteracting) {
+					|| a->interactingState != INTERACTING_STATE::kNotInteracting
+					|| (a->moveMode & 0x100) == 0x100) {
 					leanState = 0;
 				}
 			}
@@ -770,7 +788,7 @@ public:
 					if (!head)
 						head = (NiNode*)tpNode->GetObjectByName("Head");
 					if (head && spine1Inserted) {
-						float height = max(max(head->world.translate.z, spine1Inserted->world.translate.z) + heightBuffer - a->data.location.z, 2.0f);
+						float height = max(max(head->world.translate.z, spine1Inserted->world.translate.z) + heightBuffer - a->data.location.z, 10.0f);
 						//_MESSAGE("Current height %f", height);
 						if (bbx) {
 							float optimalHeight = bbx->extents.z * 2.0f;
@@ -984,8 +1002,11 @@ public:
 
 			float step = rotReturnStep * conditionalMultiplier * timeMult;
 			float retDiv = max(pow(rotReturnDiv * conditionalMultiplier, timeMult), rotReturnDivMin);
-			rotX /= retDiv;
-			rotY /= retDiv;
+			float followDiv = max(pow(3.0f, timeMult), 1.0f);
+			targetRotX /= retDiv;
+			targetRotY /= retDiv;
+			rotX += (targetRotX - rotX) / followDiv;
+			rotY += (targetRotY - rotY) / followDiv;
 			//_MESSAGE("retDiv %f rotX %f rotY %f", retDiv, rotX, rotY);
 			if (abs(rotX) * (abs(rotX) - step) <= 0) {
 				rotX = 0;
@@ -1086,7 +1107,7 @@ public:
 	}
 
 	void HookedPerformInputProcessing(InputEvent* a_queueHead) {
-		if (!UI::GetSingleton()->menuMode) {
+		if (!UI::GetSingleton()->menuMode && !disableLean) {
 			InputEvent* evn = a_queueHead;
 			while (evn) {
 				if (evn->eventType == INPUT_EVENT_TYPE::kButton) {
@@ -1188,14 +1209,6 @@ void InitializePlugin() {
 	leftAttackCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036E);
 	rightAttackCondition = (ActorValueInfo*)TESForm::GetFormByID(0x00036F);
 	_MESSAGE("Hooked to event");
-	uint8_t bytes[] = { 0xE9, 0x1C, 0x06, 0x00, 0x00, 0x90 };
-	REL::safe_write<uint8_t>(ptr_ADS_DistanceCheck.address(), std::span{ bytes });
-	for (auto it = GameSettingCollection::GetSingleton()->settings.begin(); it != GameSettingCollection::GetSingleton()->settings.end(); ++it) {
-		if (it->first == "fPlayerCoverPeekTime") {
-			it->second->SetFloat(0.0f);
-			_MESSAGE("%s changed to %f", it->first.c_str(), it->second->_value);
-		}
-	}
 	ObjectLoadWatcher* olw = new ObjectLoadWatcher();
 	ObjectLoadedEventSource::GetSingleton()->RegisterSink(olw);
 	rayInterface = (CachedRaycastData*)new FakeCachedRaycastData();

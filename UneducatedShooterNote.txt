@@ -18,3 +18,12 @@ Fallout4.exe+2D057C0 CachedRaycastData : hkbSpatialQueryInterface : hkaRaycastIn
 Fallout4.exe+2E433C8 bhkWorldM : bhkWorld
 
 Fallout4.exe+58D0A90 bhkWorldM**
+
+Fallout4.exe+659B0 ?? Uses all hits collector
+
+0000000140182E10
+
+.text:000000014019A200 ; __int64 __fastcall sub_14019A200(float *, float *, __int64, __int64, float, float, char, __int64 *, char)
+
+.text:000000014020DA30 ; void __fastcall sub_14020DA30(__int64, __int64)
+
