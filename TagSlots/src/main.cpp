@@ -76,6 +76,8 @@ void InitializePlugin() {
 	regex pattern_slottag("\\[([0-9,]+)\\]");
 	for (auto it = armors.begin(); it != armors.end(); ++it) {
 		TESObjectARMO* armor = *it;
+		if (armor->fullName.length() == 0)
+			continue;
 		_MESSAGE("Armor : %s FormID : %llx", armor->fullName.c_str(), armor->formID);
 		string fullname{ armor->GetFullName() };
 		smatch visresult;
@@ -204,12 +206,13 @@ void InitializePlugin() {
 			slottag = slottag.substr(0, slottag.length() - 1);
 			if (slottag.length() > 0) {
 				slottag += "]";
-				if (insertionIndex == 0) {
+				/*if (insertionIndex == 0) {
 					(*it)->fullName = slottag + " " + fullname;
 				}
 				else {
 					(*it)->fullName = fullname.substr(0, insertionIndex) + slottag + visresult.suffix().str();
-				}
+				}*/
+				(*it)->fullName = fullname + " | " + slottag;
 				_MESSAGE("New Name : %s", (*it)->fullName.c_str());
 			}
 			else {
