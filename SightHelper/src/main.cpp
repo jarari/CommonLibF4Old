@@ -47,6 +47,38 @@ PlayerCamera* pcam;
 ConsoleLog* clog;
 NiPoint3 lastCalculated;
 
+void PrintConsole(const char* c) {
+	clog->AddString("(Sight Helper) ");
+	clog->AddString(c);
+	clog->AddString("\n");
+}
+
+void GetEquippedWeaponMods(TESObjectWEAP* currwep) {
+	if (!p->inventoryList) {
+		return;
+	}
+	for (auto invitem = p->inventoryList->data.begin(); invitem != p->inventoryList->data.end(); ++invitem) {
+		if (invitem->object->formType == ENUM_FORM_ID::kWEAP) {
+			TESObjectWEAP* wep = (TESObjectWEAP * )(invitem->object);
+			if (invitem->stackData->IsEquipped() && wep == currwep) {
+				if (invitem->stackData->extra) {
+					BGSObjectInstanceExtra* extraData = (BGSObjectInstanceExtra * )invitem->stackData->extra->GetByType(EXTRA_DATA_TYPE::kObjectInstance);
+					if (extraData) {
+						auto data = extraData->values;
+						if (data && data->buffer) {
+							uintptr_t buf = (uintptr_t)(data->buffer);
+							for (uint32_t i = 0; i < data->size / 0x8; i++) {
+								BGSMod::Attachment::Mod* omod = (BGSMod::Attachment::Mod * )TESForm::GetFormByID(*(uint32_t*)(buf + i * 0x8));
+								_MESSAGE("Mod : %s", omod->fullName.c_str());
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void CalculateZoomData() {
 	NiNode* node = (NiNode*)p->Get3D(true);
 	if (node) {
@@ -70,20 +102,27 @@ void CalculateZoomData() {
 			if (p->currentProcess && p->currentProcess->middleHigh) {
 				BSTArray<EquippedItem> equipped = p->currentProcess->middleHigh->equippedItems;
 				if (equipped.size() != 0 && equipped[0].item.instanceData) {
+					TESObjectWEAP* weap = (TESObjectWEAP* )equipped[0].item.object;
 					TESObjectWEAP::InstanceData* instance = (TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get();
-					if (instance->type == 9 && instance->zoomData) {
-						zoomData = instance->zoomData->zoomData.cameraOffset;
+					if (instance->type == 9) {
+						_MESSAGE("Weapon : %s", weap->fullName.c_str());
+						GetEquippedWeaponMods(weap);
+						if (instance->zoomData) {
+							zoomData = instance->zoomData->zoomData.cameraOffset;
+						}
 					}
 				}
 			}
 			char consolebuf[1024] = { 0 };
-			snprintf(consolebuf, sizeof(consolebuf), "(Sight Helper) Calculated Difference %f %f\n", x, z);
-			clog->AddString(consolebuf);
-			snprintf(consolebuf, sizeof(consolebuf), "(Sight Helper) Current Zoom Data %f %f\n", zoomData.x, zoomData.z);
-			clog->AddString(consolebuf);
+			snprintf(consolebuf, sizeof(consolebuf), "Calculated Difference %f %f", x, z);
+			_MESSAGE(consolebuf); 
+			PrintConsole(consolebuf);
+			snprintf(consolebuf, sizeof(consolebuf), "Current Zoom Data %f %f", zoomData.x, zoomData.z);
+			_MESSAGE(consolebuf);
+			PrintConsole(consolebuf);
 		}
 		else {
-			clog->AddString("(Sight Helper) Helper node not found.\n");
+			PrintConsole("Helper node not found.");
 		}
 	}
 }
@@ -97,12 +136,12 @@ void ApplyZoomData() {
 			if (instance->type == 9 && instance->zoomData) {
 				zoomDataFound = true;
 				instance->zoomData->zoomData.cameraOffset = lastCalculated;
-				clog->AddString("(Sight Helper) Applied new zoom data.\n");
+				PrintConsole("Applied new zoom data.");
 			}
 		}
 	}
 	if (!zoomDataFound) {
-		clog->AddString("(Sight Helper) Current weapon has no zoom data.\n");
+		PrintConsole("Current weapon has no zoom data.");
 	}
 }
 
@@ -127,11 +166,11 @@ public:
 						CalculateZoomData();
 					}
 					else {
-						clog->AddString("(Sight Helper) Please change player scale to 1.\n");
+						PrintConsole("Please change player scale to 1.");
 					}
 				}
 				else {
-					clog->AddString("(Sight Helper) You must ADS first.\n");
+					PrintConsole("You must ADS first.");
 				}
 			}
 			else if (id == 0x6B) {
