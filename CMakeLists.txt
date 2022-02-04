@@ -82,6 +82,7 @@ conditionally_add_subdirectory(BodyPartsUI)
 conditionally_add_subdirectory(UneducatedShooter)
 conditionally_add_subdirectory(NVIDIAPatcher)
 conditionally_add_subdirectory(SightHelper)
+conditionally_add_subdirectory(NFSFallout)
 
 
 include(FetchContent)
