@@ -149,6 +149,10 @@ NiPoint3 ToDirectionVector(NiMatrix3 mat) {
 	return NiPoint3(mat.entry[2].pt[0], mat.entry[2].pt[1], mat.entry[2].pt[2]);
 }
 
+NiPoint3 ToUpVector(NiMatrix3 mat) {
+	return NiPoint3(mat.entry[1].pt[0], mat.entry[1].pt[1], mat.entry[1].pt[2]);
+}
+
 //(Rotation Matrix)^-1 * (World pos - Local Origin)
 NiPoint3 WorldToLocal(NiPoint3 wpos, NiPoint3 lorigin, NiMatrix3 rot) {
 	NiPoint3 lpos = wpos - lorigin;

@@ -5,7 +5,7 @@
 #include "RE/Havok/hkVector4.h"
 #include "RE/Havok/hknpShape.h"
 #include "RE/Havok/hknpMaterialId.h"
-#include "RE/NetImmerse/NiObject.h"
+#include "RE/NetImmerse/NiNode.h"
 #include "RE/NetImmerse/NiMatrix3.h"
 
 namespace RE {
@@ -17,6 +17,23 @@ namespace RE {
 	struct hknpPhysicsSystemData;
 	struct hknpWorld;
 	class bhkCharProxyController;
+
+	struct ImpulseData {
+		NiPoint3 dir;
+		float mag;
+		hknpWorld* world;
+		ImpulseData(NiPoint3 _d, float _m, hknpWorld* _w) {
+			dir = _d;
+			mag = _m;
+			world = _w;
+		}
+	};
+
+	void ApplyHavokImpulse(NiNode* node, ImpulseData data) {
+		using func_t = decltype(&RE::ApplyHavokImpulse);
+		REL::Relocation<func_t> func{ REL::ID(251131) };
+		return func(node, data);
+	}
 
 	struct CollisionResult {
 		hkVector4f pos;
