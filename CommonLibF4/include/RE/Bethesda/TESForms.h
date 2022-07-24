@@ -182,6 +182,7 @@ namespace RE
 	class BGSSoundTagSet;
 	class BGSLensFlare;
 	class BGSGodRays;
+	class bhkWorld;
 
 	namespace BGSMod::Attachment
 	{
@@ -1312,6 +1313,12 @@ namespace RE
 		{
 			using func_t = decltype(&TESObjectCELL::GetEncounterZone);
 			REL::Relocation<func_t> func{ REL::ID(1414637) };
+			return func(this);
+		}
+
+		[[nodiscard]] bhkWorld* GetbhkWorld() const {
+			using func_t = decltype(&TESObjectCELL::GetbhkWorld);
+			REL::Relocation<func_t> func{ REL::ID(1108031) };
 			return func(this);
 		}
 
