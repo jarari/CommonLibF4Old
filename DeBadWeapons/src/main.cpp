@@ -168,9 +168,12 @@ std::vector<uint16_t> vestRatings;
 struct CartridgeData {
 	std::vector<uint16_t> protectionChances;
 	std::vector<float> deathConditions;
+	float fatalityIncrement;
 };
 std::unordered_map<std::string, CartridgeData> cartridgeData;
 std::vector<uint32_t> deathmarkMGEFs;
+float headFatalityDecPerTier;
+float torsoFatalityDecPerTier;
 ActorValueInfo* helmetTier;
 ActorValueInfo* vestTier;
 ActorValueInfo* ActorTorsoDeathAvoid;
@@ -197,6 +200,7 @@ BGSSoundDescriptorForm* deathMarkTorsoSound;
 BGSSoundDescriptorForm* avoidedDeathSound;
 BGSSoundDescriptorForm* avoidedDeathBuzzing;
 TESImageSpaceModifier* avoidedDeathIMOD;
+TESForm* dtPhysical;
 float lastDeathMarkSoundTime;
 float lastAvoidedDeathBuzzingTime;
 //몸통, 머리 등등 부위별 파츠타입
@@ -267,26 +271,32 @@ BGSExplosion* globalExplosion;
 
 //즉사 공식, 방어력 데미지 설정
 struct GlobalData {
-	float armorDamageInitial;
-	float armorDamageMultiplier;
-	float headFatality;
-	float torsoFatality;
 	float formulaA;
 	float formulaB;
 	float formulaC;
 	float formulaD;
 	void PrintData() {
-		_MESSAGE("ArmorDamageInitial %f", armorDamageInitial);
-		_MESSAGE("ArmorDamageMultiplier %f", armorDamageMultiplier);
-		_MESSAGE("HeadFatality %f", headFatality);
-		_MESSAGE("TorsoFatality %f", torsoFatality);
 		_MESSAGE("FormulaA %f", formulaA);
 		_MESSAGE("FormulaB %f", formulaB);
 		_MESSAGE("FormulaC %f", formulaC);
-		_MESSAGE("FormulaC %f", formulaD);
+		_MESSAGE("FormulaD %f", formulaD);
 	}
 };
-GlobalData gd;
+GlobalData gdHead;
+GlobalData gdTorso;
+
+//즉사 커트라인 조정
+struct FatalityIncrement {
+	float formulaA;
+	float formulaB;
+	float formulaC;
+	void PrintData() {
+		_MESSAGE("FormulaA %f", formulaA);
+		_MESSAGE("FormulaB %f", formulaB);
+		_MESSAGE("FormulaC %f", formulaC);
+	}
+};
+FatalityIncrement fi;
 
 #pragma endregion
 
@@ -399,10 +409,11 @@ void SetupArmors() {
 	vestTier = GetAVIFByEditorID("EFD_Vest_Tier");
 	ActorTorsoDeathAvoid = GetAVIFByEditorID("EFD_TorsoDeathAvoid");
 	ActorHeadDeathAvoid = GetAVIFByEditorID("EFD_HeadDeathAvoid");
+	dtPhysical = TESForm::GetFormByID(0x60A87);
 	_MESSAGE("EFD_Helmet_Tier %llx", helmetTier);
 	_MESSAGE("EFD_Vest_Tier %llx", vestTier);
-	_MESSAGE("EFD_Vest_Tier %llx", ActorTorsoDeathAvoid);
-	_MESSAGE("EFD_Vest_Tier %llx", ActorHeadDeathAvoid);
+	_MESSAGE("ActorTorsoDeathAvoid %llx", ActorTorsoDeathAvoid);
+	_MESSAGE("ActorHeadDeathAvoid %llx", ActorHeadDeathAvoid);
 
 	/*TESDataHandler* dh = TESDataHandler::GetSingleton();
 	BSTArray<TESObjectARMO*> armors = dh->GetFormArray<TESObjectARMO>();
@@ -502,20 +513,37 @@ void SetupDeathMark() {
 	cartridgeData.insert(std::pair<std::string, CartridgeData>(std::string("Laser"), laserCd));
 
 
-	_MESSAGE("Global");
-	gd.armorDamageInitial = std::stof(ini.GetValue("Global", "ArmorDamageInitial"));
-	gd.armorDamageMultiplier = std::stof(ini.GetValue("Global", "ArmorDamageMultiplier"));
-	gd.headFatality = std::stof(ini.GetValue("Global", "HeadFatality"));
-	gd.torsoFatality = std::stof(ini.GetValue("Global", "TorsoFatality"));
-	gd.formulaA = std::stof(ini.GetValue("Global", "FormulaA"));
-	gd.formulaB = std::stof(ini.GetValue("Global", "FormulaB"));
-	gd.formulaC = std::stof(ini.GetValue("Global", "FormulaC"));
-	gd.formulaD = std::stof(ini.GetValue("Global", "FormulaD"));
-	gd.PrintData();
+	_MESSAGE("Physical Projectiles");
+	headChance = std::stof(ini.GetValue("CartridgeFatalities", "PhysicalHead"));
+	_MESSAGE("Head %f", headChance);
+	gdHead.formulaA = std::stof(ini.GetValue("PhysicalHead", "FormulaA"));
+	gdHead.formulaB = std::stof(ini.GetValue("PhysicalHead", "FormulaB"));
+	gdHead.formulaC = std::stof(ini.GetValue("PhysicalHead", "FormulaC"));
+	gdHead.formulaD = std::stof(ini.GetValue("PhysicalHead", "FormulaD"));
+	gdHead.PrintData();
+	torsoChance = std::stof(ini.GetValue("CartridgeFatalities", "PhysicalTorso"));
+	_MESSAGE("Torso %f", torsoChance);
+	gdTorso.formulaA = std::stof(ini.GetValue("PhysicalTorso", "FormulaA"));
+	gdTorso.formulaB = std::stof(ini.GetValue("PhysicalTorso", "FormulaB"));
+	gdTorso.formulaC = std::stof(ini.GetValue("PhysicalTorso", "FormulaC"));
+	gdTorso.formulaD = std::stof(ini.GetValue("PhysicalTorso", "FormulaD"));
+	gdTorso.PrintData();
+
+
+	fi.formulaA = std::stof(ini.GetValue("FatalityIncrement", "FormulaA"));
+	fi.formulaB = std::stof(ini.GetValue("FatalityIncrement", "FormulaB"));
+	fi.formulaC = std::stof(ini.GetValue("FatalityIncrement", "FormulaC"));
+	fi.PrintData();
+
+
+	headFatalityDecPerTier = std::stof(ini.GetValue("CartridgeFatalities", "HeadFatalityDecreasePerTier"));
+	_MESSAGE("HeadFatalityDecreasePerTier %f", headFatalityDecPerTier);
+	torsoFatalityDecPerTier = std::stof(ini.GetValue("CartridgeFatalities", "TorsoFatalityDecreasePerTier"));
+	_MESSAGE("TorsoFatalityDecreasePerTier %f", torsoFatalityDecPerTier);
 
 	std::vector<float> globalConditions;
-	globalConditions.push_back(gd.headFatality);
-	globalConditions.push_back(gd.torsoFatality);
+	globalConditions.push_back(headChance);
+	globalConditions.push_back(torsoChance);
 	std::vector<uint16_t> globalChances;
 	for (int i = 0; i < maxTier; ++i) {
 		globalChances.push_back(0);
@@ -789,28 +817,45 @@ void CalculateArmorTiers(Actor* a) {
 		if (invitem->object->formType == ENUM_FORM_ID::kARMO) {
 			TESObjectARMO* invarmor = static_cast<TESObjectARMO*>(invitem->object);
 			TESObjectARMO::InstanceData* invdata = &(invarmor->data);
+			TESObjectARMO::InstanceData* instanceData = invdata;
 			if (invitem->stackData->IsEquipped()) {
 				if (invarmor->bipedModelData.bipedObjectSlots & 0x800 || invarmor->bipedModelData.bipedObjectSlots & 0x40) {		//Vest
 					ExtraInstanceData* extraInstanceData = (ExtraInstanceData*)invitem->stackData->extra->GetByType(EXTRA_DATA_TYPE::kInstanceData);
 					uint16_t currentVestAR = 0;
 					if (extraInstanceData) {
-						currentVestAR = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get())->rating;
+						instanceData = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get());
+						currentVestAR = instanceData->rating;
 					}
 					else {
-						currentVestAR = invdata->rating;
+						currentVestAR = instanceData->rating;
 					}
 					if (invarmor->bipedModelData.bipedObjectSlots & 0x7) {	//Vest has helmet
 						helmetAR = currentVestAR / 4;
 					}
 					vestAR += currentVestAR;
+					if (instanceData->damageTypes) {
+						for (auto it = instanceData->damageTypes->begin(); it != instanceData->damageTypes->end(); ++it) {
+							if (it->first == dtPhysical) {
+								vestAR += it->second.i + instanceData->rating;
+							}
+						}
+					}
 				}
 				else if (invarmor->bipedModelData.bipedObjectSlots & 0x1) {	//Helmet exclusive
 					ExtraInstanceData* extraInstanceData = (ExtraInstanceData*)invitem->stackData->extra->GetByType(EXTRA_DATA_TYPE::kInstanceData);
 					if (extraInstanceData) {
-						helmetAR = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get())->rating;
+						instanceData = ((TESObjectARMO::InstanceData*)extraInstanceData->data.get());
+						helmetAR = instanceData->rating;
 					}
 					else {
 						helmetAR = invdata->rating;
+					}
+					if (instanceData->damageTypes) {
+						for (auto it = instanceData->damageTypes->begin(); it != instanceData->damageTypes->end(); ++it) {
+							if (it->first == dtPhysical) {
+								helmetAR += it->second.i + instanceData->rating;
+							}
+						}
 					}
 				}
 			}
@@ -893,18 +938,24 @@ public:
 								_MESSAGE("Processing DeathMark %s", cartridge.c_str());
 								auto cdlookup = cartridgeData.find(cartridge);
 								if (cdlookup != cartridgeData.end()) {
+									ActorValueInfo* avif = isTorso ? vestTier : helmetTier;
+									int tier = (int)a->GetActorValue(*avif);
 									bool hasDeathChance = false;
 									if (isTorso) {
-										hasDeathChance = cdlookup->second.deathConditions[1] >= a->GetActorValue(*enduranceCondition);
-										_MESSAGE("Torso condition %f current %f", cdlookup->second.deathConditions[1], a->GetActorValue(*enduranceCondition));
+										float deathCondition = min(cdlookup->second.deathConditions[1] - torsoFatalityDecPerTier * tier + cdlookup->second.fatalityIncrement, 100.f);
+										hasDeathChance = deathCondition >= a->GetActorValue(*enduranceCondition);
+										_MESSAGE("Vest Tier %d", tier);
+										_MESSAGE("Torso base condition %f inc %f final %f current %f", cdlookup->second.deathConditions[1], cdlookup->second.fatalityIncrement, deathCondition, a->GetActorValue(*enduranceCondition));
 									}
 									else {
-										hasDeathChance = cdlookup->second.deathConditions[0] >= a->GetActorValue(*perceptionCondition)
-											|| cdlookup->second.deathConditions[0] >= a->GetActorValue(*brainCondition);
-										_MESSAGE("Head condition %f current %f", cdlookup->second.deathConditions[0], a->GetActorValue(*perceptionCondition));
+										float deathCondition = min(cdlookup->second.deathConditions[0] - headFatalityDecPerTier * tier + cdlookup->second.fatalityIncrement, 100.f);
+										hasDeathChance = deathCondition >= a->GetActorValue(*perceptionCondition)
+											|| deathCondition >= a->GetActorValue(*brainCondition)
+											|| tier == 0;
+										_MESSAGE("Helmet Tier %d", tier);
+										_MESSAGE("Head base condition %f inc %f final %f current %f", cdlookup->second.deathConditions[0], cdlookup->second.fatalityIncrement, deathCondition, a->GetActorValue(*perceptionCondition));
 									}
 									if (hasDeathChance) {
-										ActorValueInfo* avif = isTorso ? vestTier : helmetTier;
 										uint16_t chance = cdlookup->second.protectionChances[(int)a->GetActorValue(*avif)];
 										uint16_t original_chance = chance;
 
@@ -1061,6 +1112,7 @@ public:
 		Projectile::ImpactData& ipct = this->impacts[0];
 		//전체 데미지를 알아내기 위해 무기의 인스턴스 데이터에서 속성 데미지들의 합을 가져옴
 		float additionalDamage = 0;
+		float numProj = 1.f;
 		if (this->weaponSource.instanceData) {
 			BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* dtArray =
 				static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->damageTypes;
@@ -1069,10 +1121,12 @@ public:
 					additionalDamage += it->second.i;
 				}
 			}
+			numProj = (float)static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->rangedData->numProjectiles;
 		}
 		//실제 데미지가 있는 탄이 로드된 셀에 존재하는 살아있는 액터를 맞췄을 때 실행
-		float calculatedDamage = this->damage + additionalDamage;
-		if (calculatedDamage > 0 && 
+		float calculatedDamage = (this->damage + additionalDamage) / numProj;
+		float physDamage = this->damage / numProj;
+		if (calculatedDamage > 5 && 
 			this->impacts.size() > 0 && 
 			!ipct.processed 
 			&& ipct.collidee.get() 
@@ -1113,7 +1167,7 @@ public:
 								this->ammoSource->fullName.c_str(), this->ammoSource->formID,
 								this->ammoSource->data.projectile->formID);
 				}
-				else if (this->weaponSource.instanceData && this->weaponSource.object->formType == ENUM_FORM_ID::kWEAP) {
+				else if (this->weaponSource.object && this->weaponSource.object->formType == ENUM_FORM_ID::kWEAP) {
 					ammo = static_cast<TESObjectWEAP::InstanceData*>(this->weaponSource.instanceData.get())->ammo;
 					_MESSAGE("Ammo : %s (FormID %llx) - Projectile FormID %llx",
 								ammo->fullName.c_str(), ammo->formID,
@@ -1150,8 +1204,8 @@ public:
 					else {
 						_MESSAGE("Node : %s is %s (partType %d)", parent->name.c_str(), EFDBodyPartsName[partFound].c_str(), partType);
 						//물리데미지 탄에 대해서만 출혈 적용
-						if (this->damage > 0 && !this->IsBeamProjectile()) {
-							_MESSAGE("Physical projectile with base damage %f", this->damage);
+						if (physDamage > 0 && !this->IsBeamProjectile()) {
+							_MESSAGE("Physical projectile with base damage %f", physDamage);
 							//출혈이 이미 진행중인 경우 데미지를 증가시켜야 하니 마법 효과 리스트를 가져옴
 							ActiveEffectList* aeList = a->GetActiveEffectList();
 							if (aeList) {
@@ -1175,7 +1229,7 @@ public:
 												_MESSAGE("%s is already bleeding", EFDBodyPartsName[partFound].c_str());
 											}
 										}
-										float bleedmag = this->damage * bld.multiplier;
+										float bleedmag = physDamage * bld.multiplier;
 										if (bleedae) {
 											bleedae->magnitude -= bleedmag;
 											bleedae->elapsed = 0;
@@ -1197,13 +1251,18 @@ public:
 							if (partFound <= 2) {
 								CartridgeData& gcd = cartridgeData.at(std::string("Global"));
 								for (int j = 0; j < maxTier; ++j) {
-									gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gd.formulaA + 1.0f) * gd.formulaB + (gd.formulaC - calculatedDamage) * 0.25f + gd.formulaD, 100), 0);
+									if (partFound == 1) {	//머리
+										gcd.fatalityIncrement = pow(calculatedDamage / fi.formulaA, fi.formulaB) * fi.formulaC * headFatalityDecPerTier;
+										gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gdHead.formulaA + 1.0f) * gdHead.formulaB + (gdHead.formulaC - calculatedDamage) * 0.25f + gdHead.formulaD, 100), 0);
+									}
+									else {	//몸통
+										gcd.fatalityIncrement = pow(calculatedDamage / fi.formulaA, fi.formulaB) * fi.formulaC * torsoFatalityDecPerTier;
+										gcd.protectionChances[j] = (uint16_t)max(min(log10(vestRatings[j] / gdTorso.formulaA + 1.0f) * gdTorso.formulaB + (gdTorso.formulaC - calculatedDamage) * 0.25f + gdTorso.formulaD, 100), 0);
+									}
 								}
 							}
-							//방어력 감소 효과 및 즉사 효과 발동
+							//즉사 효과 발동
 							if (this->shooter.get()) {
-								EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude = gd.armorDamageInitial + this->damage * gd.armorDamageMultiplier;
-								_MESSAGE("ArmorDamage magnitude %f", EFDDeathMarkGlobal->listOfEffects[0]->data.magnitude);
 								EFDDeathMarkGlobal->Cast(this->shooter.get().get(), a);
 							}
 						}
