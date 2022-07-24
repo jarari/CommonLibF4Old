@@ -14,12 +14,17 @@ char* _MESSAGE(const char* fmt, ...) {
 	return tempbuf;
 }
 
+#pragma region Morph Additon
+
+#pragma endregion
+
+#pragma region Papyrus
+
 // Functions below are mostly from the ApplyMaterialSwap function in F4SE.
 // Their method works amazing on most of objects, but it omits the skin tint data 
 // because they are casting shaderMaterialBase as BSLightingShaderMaterialBase, not BSLightingShaderMaterialSkinTint
 
-bool Visit(NiAVObject* obj, const std::function<bool(NiAVObject*)>& functor)
-{
+bool Visit(NiAVObject* obj, const std::function<bool(NiAVObject*)>& functor) {
 	if (functor(obj))
 		return true;
 
@@ -87,7 +92,7 @@ std::vector<float> GetSkinTint(std::monostate, Actor* refr, BSFixedString materi
 	}
 	if (result[4] == 0) {
 		TESNPC* npc = refr->GetNPC();
-		result[0] = (float) npc->bodyTintColorR / 255.0f;
+		result[0] = (float)npc->bodyTintColorR / 255.0f;
 		result[1] = (float)npc->bodyTintColorG / 255.0f;
 		result[2] = (float)npc->bodyTintColorB / 255.0f;
 		result[3] = (float)npc->bodyTintColorA / 255.0f;
@@ -119,7 +124,7 @@ void ApplySkinTint(std::monostate, Actor* refr, BSFixedString material, float r,
 		if (!rootNode[i])
 			continue;
 
-		Visit(rootNode[i], [&](NiAVObject * object) {
+		Visit(rootNode[i], [&](NiAVObject* object) {
 			int64_t geometry = (int64_t)object->IsGeometry();
 			if (geometry) {
 				NiPointer<BSShaderProperty> shaderProperty(*(BSShaderProperty**)(geometry + 0x138));
@@ -154,6 +159,12 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm) {
 	a_vm->BindNativeMethod("NanakoFramework", "GetSkinTint", GetSkinTint, true);
 	return true;
 }
+
+#pragma endregion
+
+#pragma region Looksmenu
+
+#pragma endregion
 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
 {
@@ -203,7 +214,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 {
 	F4SE::Init(a_f4se);
 
-	logger::critical("Custom Nanako Framework plugin loaded. This plugin is designed to assit Papyrus scripts in Custom Nanako Framework."sv);
+	logger::critical("Custom Nanako Framework plugin loaded. This plugin is designed to assist Papyrus scripts in Custom Nanako Framework."sv);
 	const F4SE::PapyrusInterface* papyrus = F4SE::GetPapyrusInterface();
 	bool succ = papyrus->Register(RegisterFuncs);
 	if (succ) {
