@@ -558,7 +558,7 @@ public:
 	F4_HEAP_REDEFINE_NEW(PlayerDeathWatcher);
 };
 
-class AnimationGraphEventWatcher : public BSTEventSink<BSAnimationGraphEvent> {
+class AnimationGraphEventWatcher {
 public:
 	typedef BSEventNotifyControl (AnimationGraphEventWatcher::* FnProcessEvent)(BSAnimationGraphEvent& evn, BSTEventSource<BSAnimationGraphEvent>* dispatcher);
 
