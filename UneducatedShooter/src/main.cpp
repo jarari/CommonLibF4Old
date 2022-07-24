@@ -81,6 +81,8 @@ float leanMax = 15.0f;
 float leanMax3rd = 30.0f;
 float leanCollisionThreshold = 0.08f;
 float leanDistMoved;
+float leanCumulativeMouseX = 0;
+float leanCumulativeMouseY = 0;
 NiPoint3 leanLastDir;
 bool toggleLean = false;
 bool disableLean = false;
@@ -215,7 +217,7 @@ NiNode* InsertBone(NiNode* node, const char* name) {
 		inserted->local.rotate.MakeIdentity();
 		inserted->AttachChild(node, true);
 		if (node->parent == inserted) {
-			_MESSAGE("%s (%llx) inserted to %s (%llx).", name, inserted, node->name.c_str(), node);
+			_MESSAGE("%s (%llx) inserted to %s (%llx). Parent : %s (%llx)", name, inserted, node->name.c_str(), node, parent->name.c_str(), parent);
 			return inserted;
 		}
 	}
@@ -226,8 +228,10 @@ void CheckHierarchy(NiNode* original, NiNode* inserted) {
 	if (original->parent != inserted) {
 		_MESSAGE("Reparenting %s to %s", original->name.c_str(), inserted->name.c_str());
 		NiNode* parent = original->parent;
-		parent->DetachChild(original);
-		parent->AttachChild(inserted, true);
+		if (parent) {
+			parent->DetachChild(original);
+			parent->AttachChild(inserted, true);
+		}
 		inserted->local.translate = NiPoint3();
 		inserted->local.rotate.MakeIdentity();
 		inserted->AttachChild(original, true);
@@ -381,13 +385,19 @@ void PreparePlayerSkeleton(NiNode* node) {
 		//_MESSAGE("Third person skeleton found.");
 		NiNode* comInserted = (NiNode*)tpNode->GetObjectByName("COMInserted");
 		NiNode* com = (NiNode*)tpNode->GetObjectByName("COM");
+		NiNode* comSurgeon = (NiNode*)tpNode->GetObjectByName("COMSurgeonInserted");
 		if (!comInserted) {
 			if (com) {
 				comInserted = InsertBone(com, "COMInserted");
 			}
 		}
 		else {
-			CheckHierarchy(com, comInserted);
+			if (comSurgeon) {
+				CheckHierarchy(comSurgeon, comInserted);
+			}
+			else {
+				CheckHierarchy(com, comInserted);
+			}
 		}
 
 		NiNode* cameraInserted = (NiNode*)tpNode->GetObjectByName("CameraInserted");
@@ -403,28 +413,41 @@ void PreparePlayerSkeleton(NiNode* node) {
 
 		NiNode* chestInserted = (NiNode*)tpNode->GetObjectByName("ChestInserted");
 		NiNode* chest = (NiNode*)tpNode->GetObjectByName("Chest");
+		NiNode* chestSurgeon = (NiNode*)tpNode->GetObjectByName("ChestSurgeonInserted");
 		if (!chestInserted) {
 			if (chest) {
 				chestInserted = InsertBone(chest, "ChestInserted");
 			}
 		}
 		else {
-			CheckHierarchy(chest, chestInserted);
+			if (chestSurgeon) {
+				CheckHierarchy(chestSurgeon, chestInserted);
+			}
+			else {
+				CheckHierarchy(chest, chestInserted);
+			}
 		}
 
 		NiNode* spine2Inserted = (NiNode*)tpNode->GetObjectByName("Spine2Inserted");
 		NiNode* spine2 = (NiNode*)tpNode->GetObjectByName("SPINE2");
+		NiNode* spine2Surgeon = (NiNode*)tpNode->GetObjectByName("SPINE2SurgeonInserted");
 		if (!spine2Inserted) {
 			if (spine2) {
 				spine2Inserted = InsertBone(spine2, "Spine2Inserted");
 			}
 		}
 		else {
-			CheckHierarchy(spine2, spine2Inserted);
+			if (spine2Surgeon) {
+				CheckHierarchy(spine2Surgeon, spine2Inserted);
+			}
+			else {
+				CheckHierarchy(spine2, spine2Inserted);
+			}
 		}
 
 		NiNode* spine1Inserted = (NiNode*)tpNode->GetObjectByName("Spine1Inserted");
 		NiNode* spine1 = (NiNode*)tpNode->GetObjectByName("SPINE1");
+		NiNode* spine1Surgeon = (NiNode*)tpNode->GetObjectByName("SPINE1SurgeonInserted");
 		if (!spine1Inserted) {
 			if (spine1) {
 				spine1Inserted = InsertBone(spine1, "Spine1Inserted");
@@ -432,39 +455,63 @@ void PreparePlayerSkeleton(NiNode* node) {
 		}
 		else {
 			CheckHierarchy(spine1, spine1Inserted);
+			if (comSurgeon) {
+				CheckHierarchy(comSurgeon, comInserted);
+			}
+			else {
+				CheckHierarchy(com, comInserted);
+			}
 		}
 
 		NiNode* pelvisInserted = (NiNode*)tpNode->GetObjectByName("PelvisInserted");
 		NiNode* pelvis = (NiNode*)tpNode->GetObjectByName("Pelvis");
+		NiNode* pelvisSurgeon = (NiNode*)tpNode->GetObjectByName("PelvisSurgeonInserted");
 		if (!pelvisInserted) {
 			if (pelvis) {
 				pelvisInserted = InsertBone(pelvis, "PelvisInserted");
 			}
 		}
 		else {
-			CheckHierarchy(pelvis, pelvisInserted);
+			if (pelvisSurgeon) {
+				CheckHierarchy(pelvisSurgeon, pelvisInserted);
+			}
+			else {
+				CheckHierarchy(pelvis, pelvisInserted);
+			}
 		}
 
 		NiNode* llegCalfInserted = (NiNode*)tpNode->GetObjectByName("LLeg_CalfInserted");
 		NiNode* llegCalf = (NiNode*)tpNode->GetObjectByName("LLeg_Calf");
+		NiNode* llegCalfSurgeon = (NiNode*)tpNode->GetObjectByName("LLeg_CalfSurgeonInserted");
 		if (!llegCalfInserted) {
 			if (llegCalf) {
 				llegCalfInserted = InsertBone(llegCalf, "LLeg_CalfInserted");
 			}
 		}
 		else {
-			CheckHierarchy(llegCalf, llegCalfInserted);
+			if (llegCalfSurgeon) {
+				CheckHierarchy(llegCalfSurgeon, llegCalfInserted);
+			}
+			else {
+				CheckHierarchy(llegCalf, llegCalfInserted);
+			}
 		}
 
 		NiNode* rlegCalfInserted = (NiNode*)tpNode->GetObjectByName("RLeg_CalfInserted");
 		NiNode* rlegCalf = (NiNode*)tpNode->GetObjectByName("RLeg_Calf");
+		NiNode* rlegCalfSurgeon = (NiNode*)tpNode->GetObjectByName("RLeg_CalfSurgeonInserted");
 		if (!rlegCalfInserted) {
 			if (rlegCalf) {
 				rlegCalfInserted = InsertBone(rlegCalf, "RLeg_CalfInserted");
 			}
 		}
 		else {
-			CheckHierarchy(rlegCalf, rlegCalfInserted);
+			if (rlegCalfSurgeon) {
+				CheckHierarchy(rlegCalfSurgeon, rlegCalfInserted);
+			}
+			else {
+				CheckHierarchy(rlegCalf, rlegCalfInserted);
+			}
 		}
 	}
 }
@@ -584,8 +631,12 @@ public:
 		if (pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson] && !leanR6Style) {
 			std::vector<float> input;
 			RotateXY((float)evn->mouseInputX, (float)evn->mouseInputY, -rotZ * toRad, input);
-			evn->mouseInputX = (int32_t)input[0];
-			evn->mouseInputY = (int32_t)input[1];
+			leanCumulativeMouseX += input[0];
+			leanCumulativeMouseY += input[1];
+			evn->mouseInputX = (int32_t)leanCumulativeMouseX;
+			evn->mouseInputY = (int32_t)leanCumulativeMouseY;
+			leanCumulativeMouseX -= (int32_t)leanCumulativeMouseX;
+			leanCumulativeMouseY -= (int32_t)leanCumulativeMouseY;
 		}
 		(this->*mouseEvn)(evn);
 	}
@@ -622,7 +673,7 @@ public:
 			lastiniUpdate = *ptr_engineTime;
 		}
 		Actor* a = (Actor*)((uintptr_t)this - 0x150);
-		if (a->Get3D()) {
+		if (a->Get3D() && (a->moreFlags & 0x20) == 0) {
 			NiAVObject* node = a->Get3D();
 			NiAVObject* tpNode = a->Get3D(false);
 			if (node != lastRoot) {
@@ -676,6 +727,8 @@ public:
 				else {
 					leanTime = max(min(leanTime - Sign(leanTime) * deltaTime, leanTimeCost), -leanTimeCost);
 				}
+				leanCumulativeMouseX = 0.f;
+				leanCumulativeMouseY = 0.f;
 			}
 			float deltaLeanWeight = leanTime / leanTimeCost - leanWeight;
 			if ((leanWeight + deltaLeanWeight > 0 && leanWeight <= 0)
@@ -1167,10 +1220,12 @@ public:
 			}
 			return BSEventNotifyControl::kContinue;
 		}
-		if (evn.formId == 0x14) {
-			_MESSAGE("Player loaded");
-			PreparePlayerSkeleton(p->Get3D(false)->IsNode());
-			PreparePlayerSkeleton(p->Get3D(true)->IsNode());
+		else {
+			if (evn.formId == 0x14) {
+				_MESSAGE("Player loaded");
+				PreparePlayerSkeleton(p->Get3D(false)->IsNode());
+				PreparePlayerSkeleton(p->Get3D(true)->IsNode());
+			}
 		}
 		return BSEventNotifyControl::kContinue;
 	}
