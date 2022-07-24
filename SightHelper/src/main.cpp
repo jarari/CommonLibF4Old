@@ -1,8 +1,10 @@
 #include <Windows.h>
 #include <unordered_map>
+#include <vector>
 #include "MathUtils.h"
 using namespace RE;
 using std::unordered_map;
+using std::vector;
 
 char tempbuf[8192] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
@@ -46,6 +48,7 @@ PlayerCharacter* p;
 PlayerCamera* pcam;
 ConsoleLog* clog;
 NiPoint3 lastCalculated;
+vector<std::string> helperNodeList = { "_SightHelper", "ReticleNode" };
 
 void PrintConsole(const char* c) {
 	clog->AddString("(Sight Helper) ");
@@ -82,7 +85,12 @@ void GetEquippedWeaponMods(TESObjectWEAP* currwep) {
 void CalculateZoomData() {
 	NiNode* node = (NiNode*)p->Get3D(true);
 	if (node) {
-		NiNode* helper = (NiNode*)node->GetObjectByName("_SightHelper");
+		NiNode* helper = nullptr;
+		int i = 0;
+		while (helper == nullptr && i < helperNodeList.size()) {
+			helper = (NiNode*)node->GetObjectByName(helperNodeList.at(i));
+			++i;
+		}
 		NiNode* camera = (NiNode*)node->GetObjectByName("Camera");
 		bhkCharacterController* con = nullptr;
 		if (p->currentProcess) {
