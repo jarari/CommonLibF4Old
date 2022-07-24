@@ -172,6 +172,24 @@ namespace RE
 		virtual void PostUpdateAnimationGraphManager([[maybe_unused]] const BSTSmartPointer<BSAnimationGraphManager>& a_animGraphMgr) const { return; }                                                                              // 17
 		virtual void PreLoadAnimationGraphManager([[maybe_unused]] const BSTSmartPointer<BSAnimationGraphManager>& a_animGraphMgr) { return; }                                                                                       // 18
 		virtual void PostLoadAnimationGraphManager([[maybe_unused]] const BSTSmartPointer<BSAnimationGraphManager>& a_animGraphMgr) { return; }                                                                                      // 19
+	
+		bool SetGraphVariableBool(const BSFixedString& a_variable, bool a_var) {
+			using func_t = decltype(&IAnimationGraphManagerHolder::SetGraphVariableBool);
+			REL::Relocation<func_t> func{ REL::ID(1437197) };
+			return func(this, a_variable, a_var);
+		};
+
+		bool SetGraphVariableFloat(const BSFixedString& a_variable, float a_var) {
+			using func_t = decltype(&IAnimationGraphManagerHolder::SetGraphVariableFloat);
+			REL::Relocation<func_t> func{ REL::ID(27400) };
+			return func(this, a_variable, a_var);
+		};
+
+		bool SetGraphVariableInt(const BSFixedString& a_variable, int a_var) {
+			using func_t = decltype(&IAnimationGraphManagerHolder::SetGraphVariableInt);
+			REL::Relocation<func_t> func{ REL::ID(732926) };
+			return func(this, a_variable, a_var);
+		};
 	};
 	static_assert(sizeof(IAnimationGraphManagerHolder) == 0x8);
 
