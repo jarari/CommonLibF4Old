@@ -35,7 +35,7 @@ PlayerCharacter* p;
 unordered_map<TESForm*, vector<TranslationData>> customRaceFemaleTranslations;
 unordered_map<TESForm*, vector<TranslationData>> customRaceMaleTranslations;
 unordered_map<TESForm*, vector<TranslationData>> customNPCTranslations;
-unordered_map<NiNode*, NiNode*> parentMap;
+unordered_map<NiNode*, string> parentMap;
 
 char tempbuf[8192] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
@@ -132,7 +132,7 @@ NiNode* InsertBone(NiNode* node, const char* name) {
 		parent->DetachChild(node);
 		parent->AttachChild(inserted, true);
 		inserted = parent->GetObjectByName(name)->IsNode();
-		parentMap.insert(pair<NiNode*, NiNode*>(node, parent));
+		parentMap.insert(pair<NiNode*, string>(node, parent->name));
 	}
 	if (inserted) {
 		inserted->local.translate = NiPoint3();
@@ -188,8 +188,11 @@ void ApplyBoneData(NiAVObject* node, TranslationData& data) {
 			if (boneorig) {
 				auto parentit = parentMap.find(boneorig);
 				if (parentit != parentMap.end()) {
+					NiNode* boneparent = (NiNode*)node->GetObjectByName(parentit->second);
 					CheckHierarchy(boneorig, bone);
-					CheckHierarchy(bone, parentit->second);
+					if (boneparent) {
+						CheckHierarchy(bone, boneparent);
+					}
 				}
 			}
 		}
@@ -212,7 +215,11 @@ void DoSurgery(Actor* a) {
 		_MESSAGE("Actor %llx - Couldn't find NPC data", a->formID);
 		return;
 	}
-	//_MESSAGE("NPC %s", npc->GetFullName());
+	if (a->moreFlags & 0x20) {
+		_MESSAGE("Actor %llx - Couldn't find skeleton", a->formID);
+		return;
+	}
+	//_MESSAGE("NPC %s (%llx, Actor %llx) Flag %04x moreFlag %04x", npc->GetFullName(), npc->formID, a->formID, a->flags, a->moreFlags);
 	unordered_map<TESForm*, vector<TranslationData>>::iterator raceit;
 	if (npc->GetSex() == 0) {
 		raceit = customRaceMaleTranslations.find(a->race);
