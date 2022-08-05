@@ -21,6 +21,7 @@ namespace RE
 	class ExtraReferenceHandles;
 	class ExtraTextDisplayData;
 	class ExtraUniqueID;
+	class NiPoint3;
 
 	enum EXTRA_DATA_TYPE : std::uint32_t
 	{
@@ -683,6 +684,12 @@ namespace RE
 			using func_t = decltype(&ExtraDataList::CreateInstanceData);
 			REL::Relocation<func_t> func{ REL::ID(1280130) };
 			return func(this, a_object, a_generateName);
+		}
+
+		bool SetBendableSplineInfo(float* thickness, float* slack, NiPoint3* unk1 = nullptr, bool* unk2 = nullptr) {
+			using func_t = decltype(&ExtraDataList::SetBendableSplineInfo);
+			REL::Relocation<func_t> func{ REL::ID(894306) };
+			return func(this, thickness, slack, unk1, unk2);
 		}
 
 		[[nodiscard]] BSExtraData* GetByType(EXTRA_DATA_TYPE a_type) const noexcept
