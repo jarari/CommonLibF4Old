@@ -872,6 +872,18 @@ namespace RE
 		// add
 		virtual BGSKeyword* GetDefaultKeyword() const { return nullptr; }  // 07
 
+		void AddKeyword(BGSKeyword* kwd) {
+			using func_t = decltype(&RE::BGSKeywordForm::AddKeyword);
+			REL::Relocation<func_t> func{ REL::ID(762999) };
+			return func(this, kwd);
+		}
+
+		void RemoveKeyword(BGSKeyword* kwd) {
+			using func_t = decltype(&RE::BGSKeywordForm::RemoveKeyword);
+			REL::Relocation<func_t> func{ REL::ID(921694) };
+			return func(this, kwd);
+		}
+
 		// members
 		BGSKeyword** keywords;      // 10
 		std::uint32_t numKeywords;  // 18
