@@ -213,6 +213,12 @@ namespace RE
 		static constexpr auto RTTI{ RTTI::EquippedWeaponData };
 		static constexpr auto VTABLE{ VTABLE::EquippedWeaponData };
 
+		void SetupFireSounds(Actor& a_actor, BGSObjectInstanceT<TESObjectWEAP>& a_weapon) {
+			using func_t = decltype(&RE::EquippedWeaponData::SetupFireSounds);
+			REL::Relocation<func_t> func{ REL::ID(1468462) };
+			return func(this, a_actor, a_weapon);
+		}
+
 		// members
 		TESAmmo* ammo;                                                                               // 10
 		std::uint32_t ammoCount;                                                                     // 18
