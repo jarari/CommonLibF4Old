@@ -62,7 +62,7 @@ Ty SafeWrite64Function(uintptr_t addr, Ty data) {
 }
 
 bool IsOnGround(bhkCharacterController* con) {
-	return (con->flags & 0x100) == 0x100;
+	return (con->flags & 0x100) == 0x100 || con->context.currentState == hknpCharacterState::hknpCharacterStateType::kOnGround;
 }
 
 bool IsOnGround(Actor* a) {
@@ -82,27 +82,25 @@ float ApplyVelocity(Actor* a, VelocityData& vd, bool modifyState = false) {
 		return 0;
 	float deltaTime = *ptr_engineTime - vd.lastRun;
 	if (vd.additive) {
-		if (con) {
-			uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con.get() + 0x470);
-			if (charProxy) {
-				con->velocityMod = hkVector4f(vd.x, vd.y, vd.z) * HAVOKtoFO4;
-				if (IsOnGround(a)) {
-					hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
-					charProxyTransform->m_translation.z += 0.5f;
-				}
-				else {
-					hkVector4f* charProxyVel = (hkVector4f*)(charProxy + 0xA0);
-					charProxyVel->x += vd.x;
-					charProxyVel->y += vd.y;
-					charProxyVel->z += vd.z;
-					vd.x = 0;
-					vd.y = 0;
-					vd.z = 0;
-					con->context.currentState = hknpCharacterState::hknpCharacterStateType::kInAir;
-					con->flags &= 0xFFFFF8FF;
-				}
-				//_MESSAGE("Actor %llx Controller %llx x %f y % f z %f onGround %d", a, con.get(), vd.x, vd.y, vd.z, (con->flags & 0x100) == 0x100);
+		uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con.get() + 0x470);
+		if (charProxy) {
+			con->context.currentState = hknpCharacterState::hknpCharacterStateType::kInAir;
+			//con->velocityMod = hkVector4f(vd.x, vd.y, vd.z) * HAVOKtoFO4;
+			if (IsOnGround(a)) {
+				hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+				charProxyTransform->m_translation.z += 0.1f;
 			}
+			else {
+				hkVector4f* charProxyVel = (hkVector4f*)(charProxy + 0xA0);
+				charProxyVel->x += vd.x;
+				charProxyVel->y += vd.y;
+				charProxyVel->z += vd.z;
+				vd.x = 0;
+				vd.y = 0;
+				vd.z = 0;
+				con->flags &= 0xFFFFF8FF;
+			}
+			//_MESSAGE("Actor %llx Controller %llx x %f y % f z %f onGround %d", a, con.get(), vd.x, vd.y, vd.z, (con->flags & 0x100) == 0x100);
 		}
 	}
 	else {
@@ -119,14 +117,15 @@ float ApplyVelocity(Actor* a, VelocityData& vd, bool modifyState = false) {
 		vd.z += vd.stepZ * deltaTime / VelocityData::stepTime;
 		con->flags = con->flags & ~((uint32_t)0xFF00) | (uint32_t)0x8700;
 		if (modifyState) {
-			con->context.currentState = hknpCharacterState::hknpCharacterStateType::kSwimming;
+			con->context.currentState = hknpCharacterState::hknpCharacterStateType::kInAir;
 		}
 		else {
 			if (con->context.currentState == hknpCharacterState::hknpCharacterStateType::kOnGround) {
-				NiPoint3A pos = a->data.location;
-				pos.z += 40.0f;
-				a->data.location = pos;
-				a->UpdateActor3DPosition();
+				uintptr_t charProxy = *(uintptr_t*)((uintptr_t)con.get() + 0x470);
+				if (charProxy) {
+					hkTransform* charProxyTransform = (hkTransform*)(charProxy + 0x40);
+					charProxyTransform->m_translation.z += 0.1f;
+				}
 			}
 		}
 	}
@@ -167,7 +166,7 @@ public:
 						data.stepZ = queueData.stepZ;
 						queueMap.erase(a);
 					}
-					if (data.duration < 0) {
+					if (data.duration <= 0) {
 						int32_t iSyncJumpState = 0;
 						a->GetGraphVariableImplInt("iSyncJumpState", iSyncJumpState);
 						if (iSyncJumpState > 0) {
