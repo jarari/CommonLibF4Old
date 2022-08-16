@@ -1400,6 +1400,12 @@ namespace RE
 		virtual const char* GetOverrideName() { return nullptr; }              // 0A
 		virtual bool GetCanContainFormsOfType(ENUM_FORM_ID a_type) const = 0;  // 0B
 
+		LEVELED_OBJECT* AddLeveledObject(uint16_t a_level, uint16_t a_count, int8_t a_chanceNone, TESForm* a_item, ContainerItemExtra* a_itemExtra) {
+			using func_t = decltype(&TESLeveledList::AddLeveledObject);
+			REL::Relocation<func_t> func{ REL::ID(1163308) };
+			return func(this, a_level, a_count, a_chanceNone, a_item, a_itemExtra);
+		}
+
 		// members
 		TESGlobal* chanceGlobal;                                                         // 08
 		BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* keywordChances;  // 10
