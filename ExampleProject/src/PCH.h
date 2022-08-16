@@ -10,6 +10,8 @@
 #	include <spdlog/sinks/msvc_sink.h>
 #endif
 #pragma warning(pop)
+#pragma warning(disable:4100);
+#pragma warning(disable:4189);
 
 #define DLLEXPORT __declspec(dllexport)
 
