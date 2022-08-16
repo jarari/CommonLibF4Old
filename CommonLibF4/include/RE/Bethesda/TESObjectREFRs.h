@@ -190,6 +190,13 @@ namespace RE
 			REL::Relocation<func_t> func{ REL::ID(732926) };
 			return func(this, a_variable, a_var);
 		};
+
+		bool RevertAnimationGraphManager(bool unk = true) {
+			using func_t = decltype(&IAnimationGraphManagerHolder::RevertAnimationGraphManager);
+			REL::Relocation<func_t> func{ REL::ID(41382) };
+			return func(this, unk);
+
+		}
 	};
 	static_assert(sizeof(IAnimationGraphManagerHolder) == 0x8);
 
@@ -535,6 +542,18 @@ namespace RE
 			using func_t = decltype(&TESObjectREFR::MarkAsDeleted);
 			REL::Relocation<func_t> func{ REL::ID(192661) };
 			return func(this);
+		}
+
+		void AddKeyword(BGSKeyword* kwd) {
+			using func_t = decltype(&RE::TESObjectREFR::AddKeyword);
+			REL::Relocation<func_t> func{ REL::ID(640674) };
+			return func(this, kwd);
+		}
+
+		void RemoveKeyword(BGSKeyword* kwd) {
+			using func_t = decltype(&RE::TESObjectREFR::RemoveKeyword);
+			REL::Relocation<func_t> func{ REL::ID(281170) };
+			return func(this, kwd);
 		}
 
 		// members
