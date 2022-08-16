@@ -83,6 +83,10 @@ conditionally_add_subdirectory(UneducatedShooter)
 conditionally_add_subdirectory(NVIDIAPatcher)
 conditionally_add_subdirectory(SightHelper)
 conditionally_add_subdirectory(NFSFallout)
+conditionally_add_subdirectory(GrapplingHook)
+conditionally_add_subdirectory(MeleeAndThrow)
+conditionally_add_subdirectory(MoreBob)
+conditionally_add_subdirectory(WeaponModificationPoint)
 
 
 include(FetchContent)
