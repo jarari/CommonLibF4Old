@@ -125,6 +125,86 @@ bool CheckPA(Actor* a) {
 	return a->extraList->HasType(EXTRA_DATA_TYPE::kPowerArmor);;
 }
 
+float GetActorScale(Actor* a) {
+	typedef float (*_GetPlayerScale)(Actor*);
+	REL::Relocation<_GetPlayerScale> func{ REL::ID(911188) };
+	return func(a);
+}
+
+void ReloadWeaponGraph(BSExtraData* animGraphPreload, Actor& a_actor) {
+	typedef void (*_ReloadWeaponGraph)(BSExtraData*, Actor&);
+	REL::Relocation<_ReloadWeaponGraph> func{ REL::ID(393711) };
+	return func(animGraphPreload, a_actor);
+}
+
+namespace RE {
+	class BSAnimationGraphManager {
+	public:
+		bool Activate() {
+			using func_t = decltype(&RE::BSAnimationGraphManager::Activate);
+			REL::Relocation<func_t> func{ REL::ID(950096) };
+			return func(this);
+		}
+		bool Deactivate() {
+			using func_t = decltype(&RE::BSAnimationGraphManager::Deactivate);
+			REL::Relocation<func_t> func{ REL::ID(591084) };
+			return func(this);
+		}
+	};
+
+	struct ActorEquipManagerEvent::Event {
+		uint32_t unk00;				//00
+		uint8_t pad04[0x7 - 0x4];	//04
+		bool isUnequip;				//07
+		void* unk08;				//08	
+		Actor* a;					//10	equip target
+	};
+
+	struct TESObjectLoadedEvent {
+		uint32_t formId;			//00
+		uint8_t loaded;				//08
+	};
+
+	struct TESEquipEvent {
+		Actor* a;					//00
+		uint32_t formId;			//0C
+		uint32_t unk08;				//08
+		uint64_t flag;				//10 0x00000000ff000000 for unequip
+	};
+
+	class HitEventSource : public BSTEventSource<TESHitEvent> {
+	public:
+		[[nodiscard]] static HitEventSource* GetSingleton() {
+			REL::Relocation<HitEventSource*> singleton{ REL::ID(989868) };
+			return singleton.get();
+		}
+	};
+
+	class ObjectLoadedEventSource : public BSTEventSource<TESObjectLoadedEvent> {
+	public:
+		[[nodiscard]] static ObjectLoadedEventSource* GetSingleton() {
+			REL::Relocation<ObjectLoadedEventSource*> singleton{ REL::ID(416662) };
+			return singleton.get();
+		}
+	};
+
+	class EquipEventSource : public BSTEventSource<TESEquipEvent> {
+	public:
+		[[nodiscard]] static EquipEventSource* GetSingleton() {
+			REL::Relocation<EquipEventSource*> singleton{ REL::ID(485633) };
+			return singleton.get();
+		}
+	};
+
+	class MGEFApplyEventSource : public BSTEventSource<TESMagicEffectApplyEvent> {
+	public:
+		[[nodiscard]] static MGEFApplyEventSource* GetSingleton() {
+			REL::Relocation<MGEFApplyEventSource*> singleton{ REL::ID(1481228) };
+			return singleton.get();
+		}
+	};
+}
+
 namespace F4 {
 	struct Unk {
 		uint32_t unk00 = 0xFFFFFFFF;
@@ -139,9 +219,16 @@ namespace F4 {
 			REL::Relocation<func_t> func{ REL::ID(198419) };
 			return func(this, ref, rebuildCollision, target);
 		}
+		void QueueShow1stPerson(bool shouldShow) {
+			using func_t = decltype(&F4::TaskQueueInterface::QueueShow1stPerson);
+			REL::Relocation<func_t> func{ REL::ID(994377) };
+			return func(this, shouldShow);
+		}
 	};
 
 	REL::Relocation<TaskQueueInterface**> ptr_TaskQueueInterface{ REL::ID(7491) };
+
+	REL::Relocation<DWORD*> ptr_hkMemoryRouterTlsIndex{ REL::ID(878080) };
 
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
