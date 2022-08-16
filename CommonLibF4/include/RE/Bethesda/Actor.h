@@ -458,6 +458,12 @@ namespace RE
 			return func(this, a, flag, idle, unk01, unk02);
 		}
 
+		bool RequestLoadAnimationsForWeaponChange(Actor& a_actor) {
+			using func_t = decltype(&AIProcess::RequestLoadAnimationsForWeaponChange);
+			REL::Relocation<func_t> func{ REL::ID(666002) };
+			return func(this, a_actor);
+		}
+
 		// members
 		MiddleLowProcessData* middleLow;                    // 00
 		MiddleHighProcessData* middleHigh;                  // 08
@@ -772,6 +778,30 @@ namespace RE
 			if (currentProcess) {
 				currentProcess->SetCurrentAmmo(a_equipIndex, a_ammo);
 			}
+		}
+
+		void HandleDefaultAnimationSwitch() {
+			using func_t = decltype(&Actor::HandleDefaultAnimationSwitch);
+			REL::Relocation<func_t> func{ REL::ID(1163130) };
+			return func(this);
+		}
+
+		void HandleItemEquip(bool bCullBone) {
+			using func_t = decltype(&Actor::HandleItemEquip);
+			REL::Relocation<func_t> func{ REL::ID(164912) };
+			return func(this, bCullBone);
+		}
+
+		bool PerformAction(BGSAction* a_action, TESObjectREFR* a_target) {
+			using func_t = decltype(&Actor::PerformAction);
+			REL::Relocation<func_t> func{ REL::ID(1057231) };
+			return func(this, a_action, a_target);
+		}
+
+		void SetGunState(uint32_t gun_state, bool unk = true) {
+			using func_t = decltype(&Actor::SetGunState);
+			REL::Relocation<func_t> func{ REL::ID(977675) };
+			return func(this, gun_state, unk);
 		}
 
 		// members
