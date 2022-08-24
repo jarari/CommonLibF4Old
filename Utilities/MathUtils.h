@@ -2,8 +2,14 @@
 #include <cmath>
 #include "RE/NetImmerse/NiMatrix3.h"
 #include "RE/NetImmerse/NiPoint3.h"
+
+#ifndef MATH_PI
+#define MATH_PI 3.14159265358979323846
+#endif
 using RE::NiMatrix3;
 using RE::NiPoint3;
+
+float toRad = (float)(MATH_PI / 180.0);
 struct Quaternion {
 public:
 	float x, y, z, w;
@@ -61,6 +67,12 @@ NiMatrix3 GetRotationMatrix33(NiPoint3 axis, float angle) {
 	float w = cos(angle / 2.0f);
 	Quaternion q = Quaternion(x, y, z, w);
 	return q.ToRotationMatrix33();
+}
+
+NiMatrix3 GetScaleMatrix(float x, float y, float z) {
+	NiMatrix3 ret;
+	SetMatrix33(x, 0, 0, 0, y, 0, 0, 0, z, ret);
+	return ret;
 }
 
 //From https://android.googlesource.com/platform/external/jmonkeyengine/+/59b2e6871c65f58fdad78cd7229c292f6a177578/engine/src/core/com/jme3/math/Quaternion.java
@@ -130,8 +142,8 @@ NiMatrix3 Inverse(NiMatrix3 mat) {
 }
 
 NiMatrix3 ToRotationMatrix(NiPoint3 p) {
-	NiPoint3 fwd = NiPoint3(1, 0, 0);
-	NiPoint3 right = NiPoint3(0, 1, 0);
+	NiPoint3 fwd = NiPoint3(0, 1, 0);
+	NiPoint3 right = NiPoint3(1, 0, 0);
 	NiMatrix3 ret;
 	ret.entry[0].pt[0] = fwd.x;
 	ret.entry[0].pt[1] = right.x;
@@ -169,6 +181,14 @@ NiPoint3 CrossProduct(NiPoint3 a, NiPoint3 b) {
 	ret[0] = a[1] * b[2] - a[2] * b[1];
 	ret[1] = a[2] * b[0] - a[0] * b[2];
 	ret[2] = a[0] * b[1] - a[1] * b[0];
+	if (ret.x == 0 && ret.y == 0 && ret.z == 0) {
+		if (a.z != 0) {
+			ret.x = 1;
+		}
+		else {
+			ret.y = 1;
+		}
+	}
 	return ret;
 }
 
