@@ -18,6 +18,8 @@ namespace RE {
 	struct hknpWorld;
 	class bhkCharProxyController;
 
+	REL::Relocation<float*> ptr_fBS2HkScale{ REL::ID(1126486) };
+
 	struct ImpulseData {
 		NiPoint3 dir;
 		float mag;
@@ -70,6 +72,7 @@ namespace RE {
 		hkVector4f translate;
 		hkVector4f scale;
 		hknpShape* shape;
+		uint8_t pad[0x80 - 0x38];
 	};
 
 	struct MultiCompoundShape {
