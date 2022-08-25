@@ -20,6 +20,8 @@ namespace RE {
 
 	REL::Relocation<float*> ptr_fBS2HkScale{ REL::ID(1126486) };
 
+	REL::Relocation<hkMemoryAllocator*> ptr_containerHeapAllocator{ REL::ID(409811) };
+
 	struct ImpulseData {
 		NiPoint3 dir;
 		float mag;
