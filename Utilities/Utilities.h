@@ -486,6 +486,9 @@ namespace F4 {
 
 	REL::Relocation<uint32_t*> ptr_invalidhandle{ REL::ID(888641) };
 
+	class ProcessLists;
+	REL::Relocation<ProcessLists*> ptr_processLists{ REL::ID(474742) };
+
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
 		REL::Relocation<func_t> func{ REL::ID(376497) };
