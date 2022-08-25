@@ -13,7 +13,67 @@ PlayerCamera* pcam;
 REL::Relocation<uintptr_t> ptr_PCUpdateMainThread{ REL::ID(633524), 0x22D };
 uintptr_t PCUpdateMainThreadOrig;
 
-void HookedUpdate() {
+const static float gunAimDiffThreshold = 0.523f;
+
+void SetupPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick) {
+	pick.SetStartEnd(start, end);
+	hkMemoryRouter* memRouter = hkMemoryRouter::GetInstancePtr();
+	int32_t memSize = 0x30;
+	int32_t arrSize = 0x60 * 0xA;
+	hknpAllHitsCollector* collector = (hknpAllHitsCollector*)memRouter->heap->BufAlloc(memSize);
+	hkMemoryAllocator* containerHeapAllocator = (hkMemoryAllocator*)ptr_containerHeapAllocator.address();
+	stl::emplace_vtable<hknpAllHitsCollector>(collector);
+	collector->hits._data = (hknpCollisionResult*)containerHeapAllocator->BufAlloc(arrSize);
+	collector->hits._capacityAndFlags = 0x8000000A;
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
+	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 0;
+	if (projForm->data.collisionLayer) {
+		uint32_t index = projForm->data.collisionLayer->collisionIdx;
+		uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
+		uint64_t flag = 0x1C15160;
+		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
+			flag = 0x15C15160;
+		*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
+	}
+	*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x9);
+}
+
+void FreeAllHitsCollector(F4::bhkPickData& pick) {
+	hkMemoryRouter* memRouter = hkMemoryRouter::GetInstancePtr();
+	hkMemoryAllocator* containerHeapAllocator = (hkMemoryAllocator*)ptr_containerHeapAllocator.address();
+	hknpAllHitsCollector* collector = *(hknpAllHitsCollector**)((uintptr_t)&pick + 0xD0);
+	if (collector) {
+		int32_t memSize = 0x30;
+		int32_t arrSize = 0x60 * (collector->hits._capacityAndFlags & 0x3FFFFFFF);
+		containerHeapAllocator->BufFree(collector->hits._data, arrSize);
+		memRouter->heap->BufFree(collector, memSize);
+	}
+}
+
+float CalculateLaserLength(NiAVObject* tri) {
+	float laserLen = 759.f;
+	using namespace F4::BSGraphics;
+	TriShape* triShape = *(TriShape**)((uintptr_t)tri + 0x148);
+	VertexDesc* vertexDesc = (VertexDesc*)((uintptr_t)tri + 0x150);
+	int32_t vertexCount = *(int32_t*)((uintptr_t)tri + 0x164);
+	uint32_t vertexSize = vertexDesc->GetSize();
+	uint32_t posOffset = vertexDesc->GetAttributeOffset(Vertex::VA_POSITION);
+	float ymin = std::numeric_limits<float>::infinity();
+	float ymax = -ymin;
+	if (triShape && triShape->buffer08) {
+		for (int v = 0; v < vertexCount; ++v) {
+			uintptr_t posPtr = (uintptr_t)triShape->buffer08->rawVertexData + v * vertexSize + posOffset;
+			NiPoint3 pos{ half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr))
+				, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x2))
+				, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x4)) };
+			ymin = min(ymin, pos.y);
+			ymax = max(ymax, pos.y);
+		}
+	}
+	return ymax - ymin;
+}
+
+void AdjustPlayerBeam() {
 	if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]
 		|| pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
 		if (p->Get3D() && p->currentProcess && p->currentProcess->middleHigh) {
@@ -46,7 +106,6 @@ void HookedUpdate() {
 							newPos = pcam->cameraRoot->world.translate + dir * 25.f;
 						}
 
-						float gunAimDiffThreshold = 0.523f;
 						float camFovThreshold = 0.85f;
 						float gunAimDiff = acos(DotProduct(camDir, gunDir));
 						if (p->gunState == 1 || p->gunState == 3 || p->gunState == 4 || gunAimDiff > gunAimDiffThreshold) {
@@ -54,40 +113,9 @@ void HookedUpdate() {
 						}
 
 						F4::bhkPickData pick = F4::bhkPickData();
-						pick.SetStartEnd(newPos, newPos + dir * 10000.f);
-						hkMemoryRouter* memRouter = hkMemoryRouter::GetInstancePtr();
-						int32_t memSize = 0x30;
-						int32_t arrSize = 0x60 * 0xA;
-						hknpAllHitsCollector* collector = (hknpAllHitsCollector*)memRouter->heap->BufAlloc(memSize);
-						hkMemoryAllocator* containerHeapAllocator = (hkMemoryAllocator*)REL::Relocation<hkMemoryAllocator*>{ REL::ID(409811) }.address();
-						stl::emplace_vtable<hknpAllHitsCollector>(collector);
-						collector->hits._data = (hknpCollisionResult*)containerHeapAllocator->BufAlloc(arrSize);
-						collector->hits._capacityAndFlags = 0x8000000A;
-						*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
-						*(uint32_t*)((uintptr_t)&pick + 0xD8) = 0;
-						if (projForm->data.collisionLayer) {
-							uint32_t index = projForm->data.collisionLayer->collisionIdx;
-							uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
-							uint64_t flag = 0x1C15160;
-							if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
-								flag = 0x15C15160;
-							*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
-						}
-						*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)p)->GetCurrentCollisionGroup() << 16) | 0x9);
+						SetupPickData(newPos, newPos + dir * 10000.f, p, projForm, pick);
 						NiAVObject* nodeHit = F4::CombatUtilities::CalculateProjectileLOS(p, projForm, pick);
 						if (pick.HasHit()) {
-							/*for (int i = 0; i < pick.GetAllCollectorRayHitSize(); ++i) {
-								hknpCollisionResult res;
-								pick.GetAllCollectorRayHitAt(i, res);
-								NiPoint3 hitPos = res.position / *ptr_fBS2HkScale;
-								NiPoint3 hitNormal = res.normal;
-								if (i == 0) {
-									laserPos = hitPos + hitNormal * 2.f;
-									laserNormal = hitNormal;
-								}
-								_MESSAGE("[%d] hitPos %f %f %f hitNormal %f %f %f fraction %f", i, hitPos.x, hitPos.y, hitPos.z, hitNormal.x, hitNormal.y, hitNormal.z, res.fraction.storage);
-								_MESSAGE("[%d] hitBodyID %04x queryBodyID %04x", i, res.hitBodyInfo.m_bodyId.value, res.queryBodyInfo.m_bodyId);
-							}*/
 							hknpCollisionResult res;
 							pick.GetAllCollectorRayHitAt(0, res);
 							NiPoint3 laserNormal = res.normal;
@@ -107,26 +135,7 @@ void HookedUpdate() {
 										if (laserBeam->parent) {
 											NiPoint3 diff = laserPos - (laserBeam->parent->world.translate + fpBase);
 											float dist = Length(diff);
-											float laserLen = 759.f;
-											using namespace F4::BSGraphics;
-											TriShape* triShape = *(TriShape**)((uintptr_t)laserBeam + 0x148);
-											VertexDesc* vertexDesc = (VertexDesc*)((uintptr_t)laserBeam + 0x150);
-											int32_t vertexCount = *(int32_t*)((uintptr_t)laserBeam + 0x164);
-											uint32_t vertexSize = vertexDesc->GetSize();
-											uint32_t posOffset = vertexDesc->GetAttributeOffset(Vertex::VA_POSITION);
-											float ymin = std::numeric_limits<float>::infinity();
-											float ymax = -ymin;
-											if (triShape && triShape->buffer08) {
-												for (int v = 0; v < vertexCount; ++v) {
-													uintptr_t posPtr = (uintptr_t)triShape->buffer08->rawVertexData + v * vertexSize + posOffset;
-													NiPoint3 pos{ half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr))
-														, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x2))
-														, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x4)) };
-													ymin = min(ymin, pos.y);
-													ymax = max(ymax, pos.y);
-												}
-											}
-											laserLen = ymax - ymin;
+											float laserLen = CalculateLaserLength(laserBeam);
 											NiMatrix3 scale = GetScaleMatrix(1, dist / laserLen, 1);
 											NiPoint3 targetDir = Normalize(laserPos - (laserBeam->parent->world.translate + fpBase));
 											NiPoint3 axis = Normalize(laserBeam->parent->world.rotate * CrossProduct(targetDir, gunDir));
@@ -152,14 +161,109 @@ void HookedUpdate() {
 								});
 							}
 						}
-						arrSize = 0x60 * (collector->hits._capacityAndFlags & 0x3FFFFFFF);
-						containerHeapAllocator->BufFree(collector->hits._data, arrSize);
-						memRouter->heap->BufFree(collector, memSize);
+						FreeAllHitsCollector(pick);
 					}
 				}
 			}
 		}
 	}
+}
+
+void AdjustNPCBeam(Actor* a) {
+	if (a->currentProcess && a->currentProcess->middleHigh) {
+		BSTArray<EquippedItem> equipped = a->currentProcess->middleHigh->equippedItems;
+		if (equipped.size() != 0 && equipped[0].item.instanceData) {
+			TESObjectWEAP::InstanceData* instance = (TESObjectWEAP::InstanceData*)equipped[0].item.instanceData.get();
+			if (instance->type == 9 && instance->ammo && a->weaponState != WEAPON_STATE::kSheathed) {
+				BGSProjectile* projForm = instance->ammo->data.projectile;
+				if (instance->rangedData->overrideProjectile) {
+					projForm = instance->rangedData->overrideProjectile;
+				}
+				if (projForm) {
+					NiNode* projNode = (NiNode*)a->Get3D()->GetObjectByName("ProjectileNode");
+					NiNode* weapon = (NiNode*)a->Get3D()->GetObjectByName("Weapon");
+					if (!projNode) {
+						projNode = weapon;
+					}
+					NiPoint3 newPos = projNode->world.translate;
+					NiPoint3 dir;
+					((ActorEx*)a)->GetAimVector(dir);
+					NiPoint3 gunDir = Normalize(ToUpVector(projNode->world.rotate));
+
+					float gunAimDiff = acos(DotProduct(dir, gunDir));
+					if (a->gunState == 1 || a->gunState == 3 || a->gunState == 4 || gunAimDiff > gunAimDiffThreshold) {
+						dir = gunDir;
+					}
+
+					F4::bhkPickData pick = F4::bhkPickData();
+					SetupPickData(newPos, newPos + dir * 10000.f, a, projForm, pick);
+					NiAVObject* nodeHit = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
+					if (pick.HasHit()) {
+						hknpCollisionResult res;
+						pick.GetAllCollectorRayHitAt(0, res);
+						NiPoint3 laserNormal = res.normal;
+						NiPoint3 laserPos = res.position / *ptr_fBS2HkScale + laserNormal * 2.f;
+						if (weapon) {
+							Visit(weapon, [&](NiAVObject* obj) {
+								if (!obj->IsTriShape())
+									return false;
+								NiAVObject* laserBeam = nullptr;
+								NiAVObject* laserDot = nullptr;
+								if (obj->name == "_LaserBeam")
+									laserBeam = obj;
+								else if (obj->name == "_LaserDot")
+									laserDot = obj;
+
+								if (laserBeam) {
+									if (laserBeam->parent) {
+										NiPoint3 diff = laserPos - laserBeam->parent->world.translate;
+										float dist = Length(diff);
+										float laserLen = CalculateLaserLength(laserBeam);
+										NiMatrix3 scale = GetScaleMatrix(1, dist / laserLen, 1);
+										NiPoint3 targetDir = Normalize(laserPos - laserBeam->parent->world.translate);
+										NiPoint3 axis = Normalize(laserBeam->parent->world.rotate * CrossProduct(targetDir, gunDir));
+										float ang = acos(max(min(DotProduct(targetDir, gunDir), 1.f), -1.f));
+										laserBeam->local.rotate = scale * GetRotationMatrix33(axis, ang);
+										NiUpdateData ud;
+										laserBeam->UpdateTransformAndBounds(ud);
+									}
+								}
+								if (laserDot) {
+									if (laserDot->parent) {
+										NiPoint3 diff = laserPos - laserDot->parent->world.translate;
+										NiPoint3 a = NiPoint3(0, 0, 1);
+										NiPoint3 axis = Normalize(CrossProduct(a, laserNormal));
+										float ang = acos(max(min(DotProduct(a, laserNormal), 1.f), -1.f));
+										laserDot->local.rotate = GetRotationMatrix33(axis, -ang) * Inverse(laserDot->parent->world.rotate);
+										laserDot->local.translate = laserDot->parent->world.rotate * diff;
+										NiUpdateData ud;
+										laserDot->UpdateTransformAndBounds(ud);
+									}
+								}
+								return false;
+							});
+						}
+					}
+					FreeAllHitsCollector(pick);
+				}
+			}
+		}
+	}
+}
+
+void HookedUpdate() {
+	BSTArray<ActorHandle>* highActorHandles = (BSTArray<ActorHandle>*)(F4::ptr_processLists.address() + 0x40);
+	if (highActorHandles->size() > 0) {
+		for (auto it = highActorHandles->begin(); it != highActorHandles->end(); ++it) {
+			Actor* a = it->get().get();
+			if (a && a->Get3D()) {
+				if (a != p)
+					AdjustNPCBeam(a);
+			}
+		}
+	}
+	AdjustPlayerBeam();
+	
 	typedef void (* FnUpdate)();
 	FnUpdate fn = (FnUpdate)PCUpdateMainThreadOrig;
 	if (fn)
