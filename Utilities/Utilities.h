@@ -306,7 +306,7 @@ namespace F4 {
 			}
 
 			[[nodiscard]] std::uint32_t GetSize() {
-				std::uint32_t vertexSize = 0;
+				/*std::uint32_t vertexSize = 0;
 				auto          flags = GetFlags();
 
 				if (flags & Vertex::VF_VERTEX) {
@@ -334,7 +334,8 @@ namespace F4 {
 					vertexSize += sizeof(std::uint16_t);
 				}
 
-				return vertexSize;
+				return vertexSize;*/
+				return (desc & 0xF) * 4;
 			}
 
 		private:
@@ -352,6 +353,43 @@ namespace F4 {
 			F4::BSGraphics::VertexDesc vertexDesc;
 			F4::BSGraphics::Buffer* buffer08;
 			F4::BSGraphics::Buffer* buffer10;
+		};
+
+		struct Renderer {
+			void IncRef(F4::BSGraphics::Buffer* vertexBuffer) {
+				using func_t = decltype(&F4::BSGraphics::Renderer::IncRef);
+				REL::Relocation<func_t> func{ REL::ID(1337764) };
+				return func(this, vertexBuffer);
+			}
+			void DecRef(F4::BSGraphics::Buffer* vertexBuffer) {
+				using func_t = decltype(&F4::BSGraphics::Renderer::DecRef);
+				REL::Relocation<func_t> func{ REL::ID(194808) };
+				return func(this, vertexBuffer);
+			}
+		};
+	}
+
+	namespace BSResource {
+		class __declspec(novtable) StreamBase {
+		public:
+			virtual ~StreamBase() = default;  // 01
+			uint32_t unk08;
+			uint32_t unk0C;
+		};
+
+		class __declspec(novtable) Stream : public StreamBase {
+		public:
+			BSFixedString exePath;		//0x10
+			BSFixedString prefix;		//0x18
+			BSFixedString name;			//0x20
+		};
+
+		class __declspec(novtable) AsyncStream : public StreamBase {
+		public:
+			uint64_t unk10;
+			BSFixedString exePath;		//0x10
+			BSFixedString prefix;		//0x18
+			BSFixedString name;			//0x20
 		};
 	}
 
@@ -488,6 +526,10 @@ namespace F4 {
 
 	class ProcessLists;
 	REL::Relocation<ProcessLists*> ptr_processLists{ REL::ID(474742) };
+
+	REL::Relocation<BSGraphics::Renderer**> ptr_gRenderer{ REL::ID(1378294) };
+
+	REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
 
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
