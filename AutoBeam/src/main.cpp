@@ -13,7 +13,8 @@ PlayerCamera* pcam;
 REL::Relocation<uintptr_t> ptr_PCUpdateMainThread{ REL::ID(633524), 0x22D };
 uintptr_t PCUpdateMainThreadOrig;
 
-const static float gunAimDiffThreshold = 0.523f;
+const static float gunAimDiffThreshold1st = 0.209f;
+const static float gunAimDiffThreshold3rd = 0.523f;
 
 void SetupPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick) {
 	pick.SetStartEnd(start, end);
@@ -63,14 +64,15 @@ float CalculateLaserLength(NiAVObject* tri) {
 	if (triShape && triShape->buffer08) {
 		for (int v = 0; v < vertexCount; ++v) {
 			uintptr_t posPtr = (uintptr_t)triShape->buffer08->rawVertexData + v * vertexSize + posOffset;
-			NiPoint3 pos{ half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr))
-				, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x2))
-				, half_float::half_cast<float, std::float_round_style::round_toward_zero>(*(half_float::half*)(posPtr + 0x4)) };
+			NiPoint3 pos{ half_float::half_cast<float>(*(half_float::half*)(posPtr))
+				, half_float::half_cast<float>(*(half_float::half*)(posPtr + 0x2))
+				, half_float::half_cast<float>(*(half_float::half*)(posPtr + 0x4)) };
 			ymin = min(ymin, pos.y);
 			ymax = max(ymax, pos.y);
 		}
+		laserLen = ymax - ymin;
 	}
-	return ymax - ymin;
+	return laserLen;
 }
 
 void AdjustPlayerBeam() {
@@ -86,6 +88,10 @@ void AdjustPlayerBeam() {
 						projForm = instance->rangedData->overrideProjectile;
 					}
 					if (projForm) {
+						if (!p->Get3D()->GetObjectByName("_LaserDot") && !p->Get3D()->GetObjectByName("_LaserBeam")) {
+							return;
+						}
+
 						bool firstPerson = p->Get3D(true) == p->Get3D();
 						NiPoint3 fpBase;
 						NiPoint3 fpOffset;
@@ -98,12 +104,14 @@ void AdjustPlayerBeam() {
 						NiPoint3 dir = Normalize(p->bulletAutoAim - newPos);
 						NiPoint3 gunDir = Normalize(ToUpVector(projNode->world.rotate));
 						NiPoint3 camDir = Normalize(ToUpVector(pcam->cameraRoot->world.rotate));
+						float gunAimDiffThreshold = gunAimDiffThreshold3rd;
 						if (firstPerson) {
 							fpBase = p->data.location;
 							NiNode* camera = (NiNode*)p->Get3D()->GetObjectByName("Camera");
 							fpOffset = pcam->cameraRoot->world.translate - camera->world.translate;
 							dir = camDir;
 							newPos = pcam->cameraRoot->world.translate + dir * 25.f;
+							gunAimDiffThreshold = gunAimDiffThreshold1st;
 						}
 
 						float camFovThreshold = 0.85f;
@@ -116,13 +124,14 @@ void AdjustPlayerBeam() {
 						SetupPickData(newPos, newPos + dir * 10000.f, p, projForm, pick);
 						NiAVObject* nodeHit = F4::CombatUtilities::CalculateProjectileLOS(p, projForm, pick);
 						if (pick.HasHit()) {
+							p->Get3D()->IncRefCount();
 							hknpCollisionResult res;
 							pick.GetAllCollectorRayHitAt(0, res);
 							NiPoint3 laserNormal = res.normal;
 							NiPoint3 laserPos = res.position / *ptr_fBS2HkScale + laserNormal * 2.f;
 							if (weapon) {
 								Visit(weapon, [&](NiAVObject* obj) {
-									if (!obj->IsTriShape())
+									if (obj->refCount == 0 || (obj->flags.flags & 0x1) == 0x1 || !obj->IsTriShape())
 										return false;
 									NiAVObject* laserBeam = nullptr;
 									NiAVObject* laserDot = nullptr;
@@ -142,7 +151,7 @@ void AdjustPlayerBeam() {
 											float ang = acos(max(min(DotProduct(targetDir, gunDir), 1.f), -1.f));
 											laserBeam->local.rotate = scale * GetRotationMatrix33(axis, ang);
 											NiUpdateData ud;
-											laserBeam->UpdateTransformAndBounds(ud);
+											laserBeam->UpdateTransforms(ud);
 										}
 									}
 									if (laserDot) {
@@ -154,12 +163,13 @@ void AdjustPlayerBeam() {
 											laserDot->local.rotate = GetRotationMatrix33(axis, -ang) * Inverse(laserDot->parent->world.rotate);
 											laserDot->local.translate = laserDot->parent->world.rotate * diff;
 											NiUpdateData ud;
-											laserDot->UpdateTransformAndBounds(ud);
+											laserDot->UpdateTransforms(ud);
 										}
 									}
 									return false;
 								});
 							}
+							p->Get3D()->DecRefCount();
 						}
 						FreeAllHitsCollector(pick);
 					}
@@ -180,6 +190,10 @@ void AdjustNPCBeam(Actor* a) {
 					projForm = instance->rangedData->overrideProjectile;
 				}
 				if (projForm) {
+					if (!a->Get3D()->GetObjectByName("_LaserDot") && !a->Get3D()->GetObjectByName("_LaserBeam")) {
+						return;
+					}
+
 					NiNode* projNode = (NiNode*)a->Get3D()->GetObjectByName("ProjectileNode");
 					NiNode* weapon = (NiNode*)a->Get3D()->GetObjectByName("Weapon");
 					if (!projNode) {
@@ -189,6 +203,7 @@ void AdjustNPCBeam(Actor* a) {
 					NiPoint3 dir;
 					((ActorEx*)a)->GetAimVector(dir);
 					NiPoint3 gunDir = Normalize(ToUpVector(projNode->world.rotate));
+					float gunAimDiffThreshold = gunAimDiffThreshold3rd;
 
 					float gunAimDiff = acos(DotProduct(dir, gunDir));
 					if (a->gunState == 1 || a->gunState == 3 || a->gunState == 4 || gunAimDiff > gunAimDiffThreshold) {
@@ -199,6 +214,7 @@ void AdjustNPCBeam(Actor* a) {
 					SetupPickData(newPos, newPos + dir * 10000.f, a, projForm, pick);
 					NiAVObject* nodeHit = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
 					if (pick.HasHit()) {
+						a->Get3D()->IncRefCount();
 						hknpCollisionResult res;
 						pick.GetAllCollectorRayHitAt(0, res);
 						NiPoint3 laserNormal = res.normal;
@@ -207,6 +223,7 @@ void AdjustNPCBeam(Actor* a) {
 							Visit(weapon, [&](NiAVObject* obj) {
 								if (!obj->IsTriShape())
 									return false;
+
 								NiAVObject* laserBeam = nullptr;
 								NiAVObject* laserDot = nullptr;
 								if (obj->name == "_LaserBeam")
@@ -225,7 +242,7 @@ void AdjustNPCBeam(Actor* a) {
 										float ang = acos(max(min(DotProduct(targetDir, gunDir), 1.f), -1.f));
 										laserBeam->local.rotate = scale * GetRotationMatrix33(axis, ang);
 										NiUpdateData ud;
-										laserBeam->UpdateTransformAndBounds(ud);
+										laserBeam->UpdateTransforms(ud);
 									}
 								}
 								if (laserDot) {
@@ -237,12 +254,13 @@ void AdjustNPCBeam(Actor* a) {
 										laserDot->local.rotate = GetRotationMatrix33(axis, -ang) * Inverse(laserDot->parent->world.rotate);
 										laserDot->local.translate = laserDot->parent->world.rotate * diff;
 										NiUpdateData ud;
-										laserDot->UpdateTransformAndBounds(ud);
+										laserDot->UpdateTransforms(ud);
 									}
 								}
 								return false;
 							});
 						}
+						a->Get3D()->DecRefCount();
 					}
 					FreeAllHitsCollector(pick);
 				}
