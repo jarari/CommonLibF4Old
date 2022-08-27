@@ -77,7 +77,8 @@ float CalculateLaserLength(NiAVObject* tri) {
 
 void AdjustPlayerBeam() {
 	if (pcam->currentState == pcam->cameraStates[CameraState::k3rdPerson]
-		|| pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]) {
+		|| pcam->currentState == pcam->cameraStates[CameraState::kFirstPerson]
+		|| pcam->currentState == pcam->cameraStates[CameraState::kFree]) {
 		if (p->Get3D() && p->currentProcess && p->currentProcess->middleHigh) {
 			BSTArray<EquippedItem> equipped = p->currentProcess->middleHigh->equippedItems;
 			if (equipped.size() != 0 && equipped[0].item.instanceData) {
@@ -93,7 +94,6 @@ void AdjustPlayerBeam() {
 						}
 
 						bool firstPerson = p->Get3D(true) == p->Get3D();
-						NiPoint3 fpBase;
 						NiPoint3 fpOffset;
 						NiNode* projNode = (NiNode*)p->Get3D()->GetObjectByName("ProjectileNode");
 						NiNode* weapon = (NiNode*)p->Get3D()->GetObjectByName("Weapon");
@@ -106,12 +106,15 @@ void AdjustPlayerBeam() {
 						NiPoint3 camDir = Normalize(ToUpVector(pcam->cameraRoot->world.rotate));
 						float gunAimDiffThreshold = gunAimDiffThreshold3rd;
 						if (firstPerson) {
-							fpBase = p->data.location;
 							NiNode* camera = (NiNode*)p->Get3D()->GetObjectByName("Camera");
 							fpOffset = pcam->cameraRoot->world.translate - camera->world.translate;
 							dir = camDir;
 							newPos = pcam->cameraRoot->world.translate + dir * 25.f;
 							gunAimDiffThreshold = gunAimDiffThreshold1st;
+						}
+						else if (pcam->currentState == pcam->cameraStates[CameraState::kFree]) {
+							dir = gunDir;
+							camDir = gunDir;
 						}
 
 						float camFovThreshold = 0.85f;
@@ -142,11 +145,11 @@ void AdjustPlayerBeam() {
 
 									if (laserBeam) {
 										if (laserBeam->parent) {
-											NiPoint3 diff = laserPos - (laserBeam->parent->world.translate + fpBase);
+											NiPoint3 diff = laserPos - (laserBeam->parent->world.translate + fpOffset);
 											float dist = Length(diff);
 											float laserLen = CalculateLaserLength(laserBeam);
 											NiMatrix3 scale = GetScaleMatrix(1, dist / laserLen, 1);
-											NiPoint3 targetDir = Normalize(laserPos - (laserBeam->parent->world.translate + fpBase));
+											NiPoint3 targetDir = Normalize(laserPos - (laserBeam->parent->world.translate + fpOffset));
 											NiPoint3 axis = Normalize(laserBeam->parent->world.rotate * CrossProduct(targetDir, gunDir));
 											float ang = acos(max(min(DotProduct(targetDir, gunDir), 1.f), -1.f));
 											laserBeam->local.rotate = scale * GetRotationMatrix33(axis, ang);
@@ -156,7 +159,7 @@ void AdjustPlayerBeam() {
 									}
 									if (laserDot) {
 										if (laserDot->parent) {
-											NiPoint3 diff = laserPos - (laserDot->parent->world.translate + fpBase);
+											NiPoint3 diff = laserPos - (laserDot->parent->world.translate + fpOffset);
 											NiPoint3 a = NiPoint3(0, 0, 1);
 											NiPoint3 axis = Normalize(CrossProduct(a, laserNormal));
 											float ang = acos(max(min(DotProduct(a, laserNormal), 1.f), -1.f));
