@@ -56,7 +56,7 @@ float CalculateLaserLength(NiAVObject* tri) {
 	using namespace F4::BSGraphics;
 	TriShape* triShape = *(TriShape**)((uintptr_t)tri + 0x148);
 	VertexDesc* vertexDesc = (VertexDesc*)((uintptr_t)tri + 0x150);
-	int32_t vertexCount = *(int32_t*)((uintptr_t)tri + 0x164);
+	int16_t vertexCount = *(int16_t*)((uintptr_t)tri + 0x164);
 	uint32_t vertexSize = vertexDesc->GetSize();
 	uint32_t posOffset = vertexDesc->GetAttributeOffset(Vertex::VA_POSITION);
 	float ymin = std::numeric_limits<float>::infinity();
@@ -127,12 +127,12 @@ void AdjustPlayerBeam() {
 						SetupPickData(newPos, newPos + dir * 10000.f, p, projForm, pick);
 						NiAVObject* nodeHit = F4::CombatUtilities::CalculateProjectileLOS(p, projForm, pick);
 						if (pick.HasHit()) {
-							p->Get3D()->IncRefCount();
 							hknpCollisionResult res;
 							pick.GetAllCollectorRayHitAt(0, res);
 							NiPoint3 laserNormal = res.normal;
 							NiPoint3 laserPos = res.position / *ptr_fBS2HkScale + laserNormal * 2.f;
 							if (weapon) {
+								InterlockedIncrement((volatile long*)((uintptr_t)p->Get3D() + 0x138));
 								Visit(weapon, [&](NiAVObject* obj) {
 									if (obj->refCount == 0 || (obj->flags.flags & 0x1) == 0x1 || !obj->IsTriShape())
 										return false;
@@ -171,8 +171,8 @@ void AdjustPlayerBeam() {
 									}
 									return false;
 								});
+								InterlockedDecrement((volatile long*)((uintptr_t)p->Get3D() + 0x138));
 							}
-							p->Get3D()->DecRefCount();
 						}
 						FreeAllHitsCollector(pick);
 					}
