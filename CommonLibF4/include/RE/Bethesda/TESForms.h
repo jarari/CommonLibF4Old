@@ -2174,6 +2174,12 @@ namespace RE
 		static constexpr auto VTABLE{ VTABLE::BGSMessage };
 		static constexpr auto FORM_ID{ ENUM_FORM_ID::kMESG };
 
+		uint32_t GetConvertedDescription(BSFixedString& a_result) {
+			using func_t = decltype(&BGSMessage::GetConvertedDescription);
+			REL::Relocation<func_t> func{ REL::ID(8331) };
+			return func(this, a_result);
+		}
+
 		// members
 		BGSMenuIcon* icon;                            // 48
 		TESQuest* ownerQuest;                         // 50
