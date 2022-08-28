@@ -496,6 +496,14 @@ namespace F4 {
 		REL::Relocation<float> fWorldGravity{ REL::ID(1378547) };
 	};
 
+	namespace BGSAnimationSystemUtils {
+		inline bool InitializeActorInstant(Actor& a, bool b) {
+			using func_t = decltype(&InitializeActorInstant);
+			REL::Relocation<func_t> func{ REL::ID(672857) };
+			return func(a, b);
+		}
+	};
+
 	class BSTGlobalEvent {
 	public:
 		virtual ~BSTGlobalEvent();
