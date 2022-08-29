@@ -822,4 +822,17 @@ void MoveBendableSpline(TESObjectREFR* rope, NiPoint3 start, NiPoint3 end, TESOb
 	//F4SE::GetTaskInterface()->AddTask(new RopeDelegate(rope, ropePos, cell, world));
 }
 
+std::string SplitString(const std::string str, const std::string delimiter, std::string& remainder) {
+	std::string ret;
+	size_t i = str.find(delimiter);
+	if (i == std::string::npos) {
+		ret = str;
+		return ret;
+	}
+
+	ret = str.substr(0, i);
+	remainder = str.substr(i + 1);
+	return ret;
+}
+
 #pragma endregion
