@@ -733,6 +733,13 @@ const char* GetObjectClassName(void* objBase) {
 	return result;
 }
 
+NiNode* CreateBone(const char* name) {
+	NiNode* newbone = new NiNode(0);
+	newbone->name = name;
+	_MESSAGE("%s created.", name);
+	return newbone;
+}
+
 bool CheckPA(Actor* a) {
 	if (!a->extraList) {
 		return false;
