@@ -181,12 +181,12 @@ NiPoint3 CrossProduct(NiPoint3 a, NiPoint3 b) {
 	ret[0] = a[1] * b[2] - a[2] * b[1];
 	ret[1] = a[2] * b[0] - a[0] * b[2];
 	ret[2] = a[0] * b[1] - a[1] * b[0];
-	if (ret.x == 0 && ret.y == 0 && ret.z == 0) {
-		if (a.z != 0) {
-			ret.x = 1;
+	if (ret[0] == 0 && ret[1] == 0 && ret[2] == 0) {
+		if (a[2] != 0) {
+			ret[0] = 1;
 		}
 		else {
-			ret.y = 1;
+			ret[1] = 1;
 		}
 	}
 	return ret;
@@ -204,12 +204,14 @@ NiPoint3 Normalize(NiPoint3 p) {
 	NiPoint3 ret = p;
 	float l = Length(p);
 	if (l == 0) {
-		ret.x = 0;
+		ret.x = 1;
 		ret.y = 0;
 		ret.z = 0;
 	}
-	ret.x /= l;
-	ret.y /= l;
-	ret.z /= l;
+	else {
+		ret.x /= l;
+		ret.y /= l;
+		ret.z /= l;
+	}
 	return ret;
 }
