@@ -1318,7 +1318,7 @@ namespace RE
 
 		[[nodiscard]] bhkWorld* GetbhkWorld() const {
 			using func_t = decltype(&TESObjectCELL::GetbhkWorld);
-			REL::Relocation<func_t> func{ REL::ID(1108031) };
+			REL::Relocation<func_t> func{ REL::ID(1326073) };
 			return func(this);
 		}
 
