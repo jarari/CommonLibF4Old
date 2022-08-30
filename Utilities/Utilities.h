@@ -482,6 +482,35 @@ namespace F4 {
 		}
 	};
 
+	namespace BSJobs {
+		class JobList {
+		public:
+			typedef void (*Job)(void*);
+
+			void AddJobToList(Job job, void* arg, const char* name) {
+				using func_t = decltype(&F4::BSJobs::JobList::AddJobToList);
+				REL::Relocation<func_t> func{ REL::ID(546314) };
+				return func(this, job, arg, name);
+			}
+
+			void InsertSyncPoint(uint32_t synctype) {
+				using func_t = decltype(&F4::BSJobs::JobList::InsertSyncPoint);
+				REL::Relocation<func_t> func{ REL::ID(625755) };
+				return func(this, synctype);
+			}
+
+			void Submit(void* local, bool b) {
+				using func_t = decltype(&F4::BSJobs::JobList::Submit);
+				REL::Relocation<func_t> func{ REL::ID(970923) };
+				return func(this, local, b);
+			}
+		};
+	};
+
+	namespace JobListManager {
+		REL::Relocation<BSJobs::JobList**> ptr_pPostPhysicsUpdateJobList{ REL::ID(1183305) };
+	}
+
 	namespace CombatUtilities {
 		inline bool CalculateProjectileTrajectory(const NiPoint3& pos, const NiPoint3& vel, float gravity, const NiPoint3& targetPos, float X, NiPoint3& out) {
 			using func_t = decltype(&CalculateProjectileTrajectory);
