@@ -18,6 +18,18 @@ namespace RE {
 	struct hknpWorld;
 	class bhkCharProxyController;
 
+	REL::Relocation<bool*> ptr_bWorldUpdatedLastFrame{ REL::ID(286044) };
+
+	REL::Relocation<bool*> ptr_bPickCountOverride{ REL::ID(511357) };
+
+	REL::Relocation<bool*> ptr_bVatsReplay{ REL::ID(736908) };
+
+	REL::Relocation<float*> ptr_fMaxPickTime{ REL::ID(195013) };
+
+	REL::Relocation<float*> ptr_fMaxPickTimeVATS{ REL::ID(1095550) };
+
+	REL::Relocation<float*> ptr_fCurrentPickTime{ REL::ID(702049) };
+
 	REL::Relocation<float*> ptr_fBS2HkScale{ REL::ID(1126486) };
 
 	REL::Relocation<hkMemoryAllocator*> ptr_containerHeapAllocator{ REL::ID(409811) };
@@ -38,6 +50,36 @@ namespace RE {
 		REL::Relocation<func_t> func{ REL::ID(251131) };
 		return func(node, data);
 	}
+
+	class hknpBSWorld {
+	public:
+		void MarkForRead() {
+			using func_t = decltype(&RE::hknpBSWorld::MarkForRead);
+			REL::Relocation<func_t> func{ REL::ID(1190448) };
+			return func(this);
+		}
+
+		void UnmarkForRead() {
+			using func_t = decltype(&RE::hknpBSWorld::UnmarkForRead);
+			REL::Relocation<func_t> func{ REL::ID(485648) };
+			return func(this);
+		}
+	};
+
+	struct hknpThreadSafetyCheck {
+	public:
+		void acquireReadAccess() {
+			using func_t = decltype(&RE::hknpThreadSafetyCheck::acquireReadAccess);
+			REL::Relocation<func_t> func{ REL::ID(1316439) };
+			return func(this);
+		}
+
+		void releaseReadAccess() {
+			using func_t = decltype(&RE::hknpThreadSafetyCheck::releaseReadAccess);
+			REL::Relocation<func_t> func{ REL::ID(598242) };
+			return func(this);
+		}
+	};
 
 	struct CollisionResult {
 		hkVector4f pos;
