@@ -138,6 +138,13 @@ namespace RE {
 			return func(this);
 
 		}
+
+		bool GetCurrentFireLocation(BGSEquipIndex index, NiPoint3& out) {
+			using func_t = decltype(&RE::ActorEx::GetCurrentFireLocation);
+			REL::Relocation<func_t> func{ REL::ID(663107) };
+			return func(this, index, out);
+
+		}
 	};
 
 	class BGSProjectileEx : public BGSProjectile {
@@ -476,10 +483,10 @@ namespace F4 {
 	};
 
 	namespace CombatUtilities {
-		inline bool CalculateProjectileTrajectory(const NiPoint3& pos, const NiPoint3& vel, float gravity, const NiPoint3& unk, float X, NiPoint3& out) {
+		inline bool CalculateProjectileTrajectory(const NiPoint3& pos, const NiPoint3& vel, float gravity, const NiPoint3& targetPos, float X, NiPoint3& out) {
 			using func_t = decltype(&CalculateProjectileTrajectory);
 			REL::Relocation<func_t> func{ REL::ID(1575156) };
-			return func(pos, vel, gravity, unk, X, out);
+			return func(pos, vel, gravity, targetPos, X, out);
 		}
 
 		inline bool CalculateProjectileLOS(Actor* a, BGSProjectile* proj, float speed, const NiPoint3* launchPos, const NiPoint3* targetPos, NiPoint3* hitPos, TESObjectREFR** collidee, float* dist) {
@@ -538,6 +545,8 @@ namespace F4 {
 	REL::Relocation<BSGraphics::Renderer**> ptr_gRenderer{ REL::ID(1378294) };
 
 	REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
+
+	REL::Relocation<NiPoint3*> ptr_k1stPersonCameraLocation{ REL::ID(1304276) };
 
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
@@ -736,7 +745,6 @@ const char* GetObjectClassName(void* objBase) {
 NiNode* CreateBone(const char* name) {
 	NiNode* newbone = new NiNode(0);
 	newbone->name = name;
-	_MESSAGE("%s created.", name);
 	return newbone;
 }
 
