@@ -414,6 +414,12 @@ namespace F4 {
 			func(this);
 		}
 
+		~bhkPickData() {
+			typedef bhkPickData* func_t(bhkPickData*);
+			REL::Relocation<func_t> func{ REL::ID(109425) };
+			func(this);
+		}
+
 		void SetStartEnd(const NiPoint3& start, const NiPoint3& end) {
 			using func_t = decltype(&F4::bhkPickData::SetStartEnd);
 			REL::Relocation<func_t> func{ REL::ID(747470) };
@@ -524,8 +530,8 @@ namespace F4 {
 			return func(a, proj, speed, launchPos, targetPos, hitPos, collidee, dist);
 		}
 
-		inline NiAVObject* CalculateProjectileLOS(Actor* a, BGSProjectile* proj, bhkPickData& pick) {
-			typedef NiAVObject* func_t(Actor*, BGSProjectile*, bhkPickData&);
+		inline bhkNPCollisionObject* CalculateProjectileLOS(Actor* a, BGSProjectile* proj, bhkPickData& pick) {
+			typedef bhkNPCollisionObject* func_t(Actor*, BGSProjectile*, bhkPickData&);
 			REL::Relocation<func_t> func{ REL::ID(55339) };
 			return func(a, proj, pick);
 		}
