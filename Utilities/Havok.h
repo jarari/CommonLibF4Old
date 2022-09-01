@@ -17,6 +17,7 @@ namespace RE {
 	struct hknpPhysicsSystemData;
 	struct hknpWorld;
 	class bhkCharProxyController;
+	class hknpShapeTagCodec;
 
 	REL::Relocation<bool*> ptr_bWorldUpdatedLastFrame{ REL::ID(286044) };
 
@@ -32,7 +33,15 @@ namespace RE {
 
 	REL::Relocation<float*> ptr_fBS2HkScale{ REL::ID(1126486) };
 
+	REL::Relocation<hkSimdFloat32*> ptr_earlyOutThreshold{ REL::ID(781602) };
+
 	REL::Relocation<hkMemoryAllocator*> ptr_containerHeapAllocator{ REL::ID(409811) };
+
+	REL::Relocation<hknpShapeTagCodec*> ptr_shapeTagCodec{ REL::ID(322467) };
+
+	REL::Relocation<hknpCollisionFilter*> ptr_collisionFilter{ REL::ID(246130) };
+
+	REL::Relocation<bhkWorld***> ptr_bhkWorldM{ REL::ID(128691) };
 
 	struct ImpulseData {
 		NiPoint3 dir;
@@ -645,9 +654,4 @@ namespace RE {
 		/// Set to true if the two triangle shapes were passed in from the outside.
 		uint32_t m_externallyAllocatedTriangles;
 	};
-
-
-	REL::Relocation<hknpShapeTagCodec*> ptr_shapeTagCodec{ REL::ID(322467) };
-	REL::Relocation<hknpCollisionFilter*> ptr_collisionFilter{ REL::ID(246130) };
-	REL::Relocation<bhkWorld***> ptr_bhkWorldM{ REL::ID(128691) };
 }
