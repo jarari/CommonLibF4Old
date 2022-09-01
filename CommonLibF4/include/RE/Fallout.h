@@ -130,6 +130,7 @@
 #include "RE/Havok/hknpCharacterContext.h"
 #include "RE/Havok/hknpCharacterState.h"
 #include "RE/Havok/hknpCharacterSurfaceInfo.h"
+#include "RE/Havok/hknpClosestHitCollector.h"
 #include "RE/Havok/hknpClosestUniqueBodyIdHitCollector.h"
 #include "RE/Havok/hknpCollisionQueryCollector.h"
 #include "RE/Havok/hknpCollisionResult.h"
