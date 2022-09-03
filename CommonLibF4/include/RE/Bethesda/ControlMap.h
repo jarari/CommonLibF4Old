@@ -59,6 +59,18 @@ namespace RE
 			return *singleton;
 		}
 
+		bool RemapButton(BSFixedString const& id, INPUT_DEVICE device, int32_t key) {
+			using func_t = decltype(&ControlMap::RemapButton);
+			REL::Relocation<func_t> func{ REL::ID(11351) };
+			return func(this, id, device, key);
+		}
+
+		void SaveRemappings() {
+			using func_t = decltype(&ControlMap::SaveRemappings);
+			REL::Relocation<func_t> func{ REL::ID(1141541) };
+			return func(this);
+		}
+
 		// members
 		InputContext* controlMaps[stl::to_underlying(UserEvents::INPUT_CONTEXT_ID::kTotal)];          // 008
 		BSTArray<LinkedMapping> linkedMappings;                                                       // 110
