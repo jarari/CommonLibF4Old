@@ -42,16 +42,16 @@ void SetMatrix33(float a, float b, float c, float d, float e, float f, float g, 
 }
 
 NiMatrix3 GetRotationMatrix33(float pitch, float yaw, float roll) {
-	NiMatrix3 m_yaw;
-	SetMatrix33(cos(yaw), -sin(yaw), 0,
-				sin(yaw), cos(yaw), 0,
-				0, 0, 1,
-				m_yaw);
 	NiMatrix3 m_roll;
-	SetMatrix33(1, 0, 0,
-				0, cos(roll), -sin(roll),
-				0, sin(roll), cos(roll),
+	SetMatrix33(cos(roll), -sin(roll), 0,
+				sin(roll), cos(roll), 0,
+				0, 0, 1,
 				m_roll);
+	NiMatrix3 m_yaw;
+	SetMatrix33(1, 0, 0,
+				0, cos(yaw), -sin(yaw),
+				0, sin(yaw), cos(yaw),
+				m_yaw);
 	NiMatrix3 m_pitch;
 	SetMatrix33(cos(pitch), 0, sin(pitch),
 				0, 1, 0,
@@ -139,22 +139,6 @@ NiMatrix3 Inverse(NiMatrix3 mat) {
 				d * h - e * g, -(a * h - b * g), a * e - b * d,
 				invmat);
 	return invmat * (1.0f / det);
-}
-
-NiMatrix3 ToRotationMatrix(NiPoint3 p) {
-	NiPoint3 fwd = NiPoint3(0, 1, 0);
-	NiPoint3 right = NiPoint3(1, 0, 0);
-	NiMatrix3 ret;
-	ret.entry[0].pt[0] = fwd.x;
-	ret.entry[0].pt[1] = right.x;
-	ret.entry[0].pt[2] = p.x;
-	ret.entry[1].pt[0] = fwd.y;
-	ret.entry[1].pt[1] = right.y;
-	ret.entry[1].pt[2] = p.y;
-	ret.entry[2].pt[0] = fwd.z;
-	ret.entry[2].pt[1] = right.z;
-	ret.entry[2].pt[2] = p.z;
-	return ret;
 }
 
 NiPoint3 ToDirectionVector(NiMatrix3 mat) {
