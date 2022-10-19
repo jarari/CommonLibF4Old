@@ -59,7 +59,6 @@ namespace RE
 	class BSFaceGenAnimationData;
 	class BSLightingShaderProperty;
 	class BSPathingRequest;
-	class BSTransformDeltaEvent;
 	class CombatController;
 	class CombatGroup;
 	class EffectItem;
@@ -86,6 +85,7 @@ namespace RE
 	struct BSAnimationGraphVariableCache;
 	struct BSMovementDataChangedEvent;
 	struct BSSubGraphActivationUpdate;
+	struct BSTransformDeltaEvent;
 	struct CastPowerItem;
 	struct DeferredHideLimb;
 	struct HighProcessData;
@@ -213,7 +213,8 @@ namespace RE
 		static constexpr auto RTTI{ RTTI::EquippedWeaponData };
 		static constexpr auto VTABLE{ VTABLE::EquippedWeaponData };
 
-		void SetupFireSounds(Actor& a_actor, BGSObjectInstanceT<TESObjectWEAP>& a_weapon) {
+		void SetupFireSounds(Actor& a_actor, BGSObjectInstanceT<TESObjectWEAP>& a_weapon)
+		{
 			using func_t = decltype(&RE::EquippedWeaponData::SetupFireSounds);
 			REL::Relocation<func_t> func{ REL::ID(1468462) };
 			return func(this, a_actor, a_weapon);
@@ -452,13 +453,15 @@ namespace RE
 		}
 
 		//Flag should be 0x35
-		void PlayIdle(Actor* a, uint32_t flag, TESIdleForm* idle, bool unk01 = true, uint64_t unk02 = 0) {
+		void PlayIdle(Actor* a, uint32_t flag, TESIdleForm* idle, bool unk01 = true, uint64_t unk02 = 0)
+		{
 			using func_t = decltype(&AIProcess::PlayIdle);
 			REL::Relocation<func_t> func{ REL::ID(1446774) };
 			return func(this, a, flag, idle, unk01, unk02);
 		}
 
-		bool RequestLoadAnimationsForWeaponChange(Actor& a_actor) {
+		bool RequestLoadAnimationsForWeaponChange(Actor& a_actor)
+		{
 			using func_t = decltype(&AIProcess::RequestLoadAnimationsForWeaponChange);
 			REL::Relocation<func_t> func{ REL::ID(666002) };
 			return func(this, a_actor);
@@ -546,6 +549,19 @@ namespace RE
 		kSheathing
 	};
 
+	enum class GUN_STATE : std::uint32_t
+	{
+		kDrawn,
+		kRelaxed,
+		kBlocked,
+		kAlert,
+		kReloading,
+		kThrowing,
+		kSighted,
+		kFire,
+		kFireSighted
+	};
+
 	class __declspec(novtable) ActorState :
 		public IMovementState  // 00
 	{
@@ -582,7 +598,7 @@ namespace RE
 		std::uint32_t staggered: 1;             // 0C:09
 		std::uint32_t inWrongProcessLevel: 1;   // 0C:10
 		std::uint32_t stance: 3;                // 0C:11
-		std::uint32_t gunState: 4;              // 0C:14
+		GUN_STATE gunState: 4;                  // 0C:14
 		INTERACTING_STATE interactingState: 2;  // 0C:18
 		std::uint32_t headTrackRotation: 1;     // 0C:20
 		std::uint32_t inSyncAnim: 1;            // 0C:21
@@ -780,25 +796,29 @@ namespace RE
 			}
 		}
 
-		void HandleDefaultAnimationSwitch() {
+		void HandleDefaultAnimationSwitch()
+		{
 			using func_t = decltype(&Actor::HandleDefaultAnimationSwitch);
 			REL::Relocation<func_t> func{ REL::ID(1163130) };
 			return func(this);
 		}
 
-		void HandleItemEquip(bool bCullBone) {
+		void HandleItemEquip(bool bCullBone)
+		{
 			using func_t = decltype(&Actor::HandleItemEquip);
 			REL::Relocation<func_t> func{ REL::ID(164912) };
 			return func(this, bCullBone);
 		}
 
-		bool PerformAction(BGSAction* a_action, TESObjectREFR* a_target) {
+		bool PerformAction(BGSAction* a_action, TESObjectREFR* a_target)
+		{
 			using func_t = decltype(&Actor::PerformAction);
 			REL::Relocation<func_t> func{ REL::ID(1057231) };
 			return func(this, a_action, a_target);
 		}
 
-		void SetGunState(uint32_t gun_state, bool unk = true) {
+		void SetGunState(uint32_t gun_state, bool unk = true)
+		{
 			using func_t = decltype(&Actor::SetGunState);
 			REL::Relocation<func_t> func{ REL::ID(977675) };
 			return func(this, gun_state, unk);
