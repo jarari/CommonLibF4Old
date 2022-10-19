@@ -73,10 +73,12 @@ namespace RE {
 	};
 
 	class NiUpdateData {
+	public:
 		uint32_t unk00;
-		uint64_t unk04;
-		uint64_t unk0C;
-		uint32_t unk14;
+		uint32_t unk04;
+		uint64_t unk08;
+		uint64_t unk10;
+		uint32_t unk18;
 	};
 
 	class ExtraBendableSplineParams : public BSExtraData {
@@ -122,6 +124,12 @@ namespace RE {
 			REL::Relocation<func_t> func{ REL::ID(1049748) };
 			return func(this, ang);
 		}
+
+		bool GetItemCount(uint32_t& count, TESForm* item, bool countComponent) {
+			using func_t = decltype(&RE::TESObjectREFREx::GetItemCount);
+			REL::Relocation<func_t> func{ REL::ID(635042) };
+			return func(this, count, item, countComponent);
+		}
 	};
 
 	class ActorEx : public Actor {
@@ -136,14 +144,18 @@ namespace RE {
 			using func_t = decltype(&RE::ActorEx::GetCurrentCollisionGroup);
 			REL::Relocation<func_t> func{ REL::ID(410500) };
 			return func(this);
-
 		}
 
 		bool GetCurrentFireLocation(BGSEquipIndex index, NiPoint3& out) {
 			using func_t = decltype(&RE::ActorEx::GetCurrentFireLocation);
 			REL::Relocation<func_t> func{ REL::ID(663107) };
 			return func(this, index, out);
+		}
 
+		float GetDesiredSpeed() {
+			using func_t = decltype(&RE::ActorEx::GetDesiredSpeed);
+			REL::Relocation<func_t> func{ REL::ID(106892) };
+			return func(this);
 		}
 	};
 
@@ -165,6 +177,19 @@ namespace RE {
 		}
 	};
 
+	class NiCloningProcess {
+	public:
+		BSTHashMap<void*, void*>	unk00;	// 00
+		void* unk30;	// 30
+		uint64_t		unk38;		// 38
+		uint64_t		unk40;		// 40
+		void* unk48;	// 48 - DEADBEEF
+		void* unk50;	// 50 - bucket
+		uint64_t		unk58;		// 58
+		uint32_t		unk60;		// 60 - copytype? 0, 1, 2
+		uint32_t		unk64;		// 64
+	};
+
 	struct ActorEquipManagerEvent::Event {
 		uint32_t unk00;				//00
 		uint8_t pad04[0x7 - 0x4];	//04
@@ -183,6 +208,22 @@ namespace RE {
 		uint32_t formId;			//0C
 		uint32_t unk08;				//08
 		uint64_t flag;				//10 0x00000000ff000000 for unequip
+	};
+
+	struct PlayerAmmoCountEvent {
+		uint32_t current;
+		uint32_t total;
+	};
+
+	struct BSTransformDeltaEvent {
+		NiMatrix3 deltaRotation;
+		NiPoint4 deltaTranslation;
+		NiPoint4 previousTranslation;
+		NiPoint4 previousRotation;
+		NiPoint4 previousScale;
+		NiPoint4 currentTranslation;
+		NiPoint4 currentRotation;
+		NiPoint4 currentScale;
 	};
 
 	struct TESLoadGameEvent {};
@@ -232,6 +273,65 @@ namespace RE {
 		REL::Relocation<func_t> func{ REL::ID(1287682) };
 		return func(node);
 	}
+
+	struct DamageImpactData {
+		NiPoint4 hitPos;
+		NiPoint4 hitDirection;
+		NiPoint4 projectileDir;
+		bhkNPCollisionObject* collisionObj;
+	};
+	static_assert(sizeof(DamageImpactData) == 0x38);
+
+	struct VATSCommand;
+	class HitData {
+	public:
+		DamageImpactData impactData;
+		int8_t gap38[8];
+		uint32_t attackerHandle;
+		uint32_t victimHandle;
+		uint32_t sourceHandle;
+		int8_t gap4C[4];
+		BGSAttackData* attackData;
+		BGSObjectInstance source;
+		MagicItem* effect;
+		SpellItem* spellItem;
+		VATSCommand* VATSCommand;
+		TESAmmo* ammo;
+		BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* damageTypes;
+		float calculatedBaseDamage;
+		float baseDamage;
+		float totalDamage;
+		float blockedDamage;
+		float blockMult;
+		float reducedDamage;
+		float field_A8;
+		float blockStaggerMult;
+		float sneakAttackMult;
+		float field_B4;
+		float field_B8;
+		float field_BC;
+		float criticalDamageMult;
+		uint32_t flags;
+		BGSEquipIndex equipIndex;
+		uint32_t materialType;
+		int32_t bodypartType;
+		int8_t gapD4[4];
+	};
+	static_assert(sizeof(HitData) == 0xD8);
+
+	class TESHitEvent {
+	public:
+		HitData hitdata;
+		int8_t gapD8[8];
+		TESObjectREFR* victim;
+		TESObjectREFR* attacker;
+		BSFixedString matName;
+		uint32_t sourceFormID;
+		uint32_t projFormID;
+		bool hasHitData;
+		int8_t gapD1[7];
+	};
+	static_assert(sizeof(TESHitEvent) == 0x108);
 }
 
 namespace F4 {
@@ -467,6 +567,15 @@ namespace F4 {
 	};
 	static_assert(sizeof(bhkPickData) == 0xE0);
 
+	class GameUIModel {
+	public:
+		void UpdateDataModels() {
+			using func_t = decltype(&F4::GameUIModel::UpdateDataModels);
+			REL::Relocation<func_t> func{ REL::ID(1269653) };
+			return func(this);
+		}
+	};
+
 	class TaskQueueInterface {
 	public:
 		void QueueRebuildBendableSpline(TESObjectREFR* ref, bool rebuildCollision, NiAVObject* target) {
@@ -485,6 +594,12 @@ namespace F4 {
 			using func_t = decltype(&F4::TaskQueueInterface::QueueUpdate3D);
 			REL::Relocation<func_t> func{ REL::ID(581890) };
 			return func(this, ref, unk);
+		}
+
+		void QueueWeaponFire(TESObjectWEAP* wep, TESObjectREFR* shooter, BGSEquipIndex index, TESAmmo* ammo) {
+			using func_t = decltype(&F4::TaskQueueInterface::QueueWeaponFire);
+			REL::Relocation<func_t> func{ REL::ID(15449) };
+			return func(this, wep, shooter, index, ammo);
 		}
 	};
 
@@ -517,6 +632,14 @@ namespace F4 {
 		REL::Relocation<BSJobs::JobList**> ptr_pPostPhysicsUpdateJobList{ REL::ID(1183305) };
 	}
 
+	namespace BSUtilities {
+		inline NiAVObject* GetObjectByName(NiAVObject* root, const BSFixedString& name, bool tryInternal, bool dontAttach) {
+			using func_t = decltype(&GetObjectByName);
+			REL::Relocation<func_t> func{ REL::ID(843650) };
+			return func(root, name, tryInternal, dontAttach);
+		}
+	}
+
 	namespace CombatUtilities {
 		inline bool CalculateProjectileTrajectory(const NiPoint3& pos, const NiPoint3& vel, float gravity, const NiPoint3& targetPos, float X, NiPoint3& out) {
 			using func_t = decltype(&CalculateProjectileTrajectory);
@@ -537,6 +660,14 @@ namespace F4 {
 		}
 		REL::Relocation<float> fWorldGravity{ REL::ID(1378547) };
 	};
+
+	namespace AnimationSystemUtils {
+		inline bool WillEventChangeState(const TESObjectREFR& ref, const BSFixedString& evn) {
+			using func_t = decltype(&WillEventChangeState);
+			REL::Relocation<func_t> func{ REL::ID(35074) };
+			return func(ref, evn);
+		}
+	}
 
 	namespace BGSAnimationSystemUtils {
 		inline bool InitializeActorInstant(Actor& a, bool b) {
@@ -565,23 +696,6 @@ namespace F4 {
 		uint64_t    unk10;                                // 10
 		BSTArray<EventSource<void*>*> eventSources;       // 18
 	};
-
-	REL::Relocation<BSTGlobalEvent**> g_globalEvents{ REL::ID(1424022) };
-
-	REL::Relocation<TaskQueueInterface**> ptr_TaskQueueInterface{ REL::ID(7491) };
-
-	REL::Relocation<DWORD*> ptr_hkMemoryRouterTlsIndex{ REL::ID(878080) };
-
-	REL::Relocation<uint32_t*> ptr_invalidhandle{ REL::ID(888641) };
-
-	class ProcessLists;
-	REL::Relocation<ProcessLists*> ptr_processLists{ REL::ID(474742) };
-
-	REL::Relocation<BSGraphics::Renderer**> ptr_gRenderer{ REL::ID(1378294) };
-
-	REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
-
-	REL::Relocation<NiPoint3*> ptr_k1stPersonCameraLocation{ REL::ID(1304276) };
 
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
@@ -613,6 +727,29 @@ namespace F4 {
 		REL::Relocation<func_t> func{ REL::ID(1332434) };
 		return func(source, pTargetHandle, parentCell, worldSpace, position, rotation);
 	}
+
+	REL::Relocation<BSTGlobalEvent**> g_globalEvents{ REL::ID(1424022) };
+
+	REL::Relocation<TaskQueueInterface**> ptr_TaskQueueInterface{ REL::ID(7491) };
+
+	REL::Relocation<DWORD*> ptr_hkMemoryRouterTlsIndex{ REL::ID(878080) };
+
+	REL::Relocation<uint32_t*> ptr_invalidhandle{ REL::ID(888641) };
+
+	class ProcessLists;
+	REL::Relocation<ProcessLists*> ptr_processLists{ REL::ID(474742) };
+
+	REL::Relocation<BSGraphics::Renderer**> ptr_gRenderer{ REL::ID(1378294) };
+
+	REL::Relocation<float*> ptr_engineTime{ REL::ID(599343) };
+
+	REL::Relocation<float*> ptr_deltaTime{ REL::ID(1013228) };
+
+	REL::Relocation<NiPoint3*> ptr_k1stPersonCameraLocation{ REL::ID(1304276) };
+
+	REL::Relocation<NiPoint3A*> ptr_PlayerAdjust{ REL::ID(988646) };
+
+	REL::Relocation<GameUIModel**> ptr_GameUIModel{ REL::ID(17419) };
 }
 
 char tempbuf[8192] = { 0 };
@@ -870,6 +1007,7 @@ std::string SplitString(const std::string str, const std::string delimiter, std:
 	size_t i = str.find(delimiter);
 	if (i == std::string::npos) {
 		ret = str;
+		remainder = "";
 		return ret;
 	}
 
@@ -879,3 +1017,4 @@ std::string SplitString(const std::string str, const std::string delimiter, std:
 }
 
 #pragma endregion
+
