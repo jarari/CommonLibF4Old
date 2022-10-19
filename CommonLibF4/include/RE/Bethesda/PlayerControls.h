@@ -124,10 +124,18 @@ namespace RE
 			return *singleton;
 		}
 
-		bool CanPerformAction(uint32_t id) {
+		bool CanPerformAction(DEFAULT_OBJECT id)
+		{
 			using func_t = decltype(&PlayerControls::CanPerformAction);
 			REL::Relocation<func_t> func{ REL::ID(565925) };
 			return func(this, id);
+		}
+
+		bool DoAction(DEFAULT_OBJECT id, uint32_t priority)
+		{
+			using func_t = decltype(&PlayerControls::DoAction);
+			REL::Relocation<func_t> func{ REL::ID(818081) };
+			return func(this, id, priority);
 		}
 
 		void RegisterHandler(PlayerInputHandler* a_handler) { DoRegisterHandler(a_handler, false); }
