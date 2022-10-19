@@ -58,6 +58,8 @@ set(headers ${headers}
 	include/RE/Bethesda/BSSystemFileStreamer.h
 	include/RE/Bethesda/BSTArray.h
 	include/RE/Bethesda/BSTBTree.h
+	include/RE/Bethesda/BSTempEffect.h
+	include/RE/Bethesda/BSTempEffectDebris.h
 	include/RE/Bethesda/BSTEvent.h
 	include/RE/Bethesda/BSTextureSet.h
 	include/RE/Bethesda/BSTextureStreamer.h
