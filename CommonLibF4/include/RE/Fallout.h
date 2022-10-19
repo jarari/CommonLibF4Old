@@ -60,6 +60,8 @@
 #include "RE/Bethesda/BSTSmallIndexScatterTable.h"
 #include "RE/Bethesda/BSTSmartPointer.h"
 #include "RE/Bethesda/BSTTuple.h"
+#include "RE/Bethesda/BSTempEffect.h"
+#include "RE/Bethesda/BSTempEffectDebris.h"
 #include "RE/Bethesda/BSTextureSet.h"
 #include "RE/Bethesda/BSTextureStreamer.h"
 #include "RE/Bethesda/BSTimer.h"
