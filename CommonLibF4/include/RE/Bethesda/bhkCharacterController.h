@@ -84,6 +84,13 @@ namespace RE
 		virtual void RemoveFromWorld();                             // 2F
 		virtual bool SetCollisionFilterInfo(CFilter a_filterInfo);  // 30
 
+		void CopyMembers(bhkNPCollisionObject* from, NiCloningProcess& cp)
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::CopyMembers);
+			REL::Relocation<func_t> func{ REL::ID(1558409) };
+			func(this, from, cp);
+		}
+
 		// members
 		NiPointer<bhkPhysicsSystem> spSystem;  // 20
 		std::uint32_t systemBodyIdx;           // 28
