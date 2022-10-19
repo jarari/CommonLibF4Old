@@ -80,4 +80,28 @@ namespace RE
 		Scaleform::GFx::Event* scaleformEvent{ nullptr };  // 18
 	};
 	static_assert(sizeof(BSUIScaleformData) == 0x20);
+
+	class __declspec(novtable) BSUIMessageData :
+		public IUIMessageData  // 00
+	{
+	public:
+		static constexpr auto RTTI{ RTTI::BSUIMessageData };
+		static constexpr auto VTABLE{ VTABLE::BSUIMessageData };
+
+		void SendUIBoolMessage(const BSFixedString& a_menu, UI_MESSAGE_TYPE a_type, bool a_msg)
+		{
+			using func_t = decltype(&BSUIMessageData::SendUIBoolMessage);
+			REL::Relocation<func_t> func{ REL::ID(1388308) };
+			return func(this, a_menu, a_type, a_msg);
+		}
+
+		// override (UIMessage)
+		BSUIMessageData* QData() override { return this; }              // 02
+		const BSUIMessageData* QData() const override { return this; }  // 01
+
+		uint64_t qword18;
+		BSFixedString strmsg;
+		uint32_t msg;
+	};
+	static_assert(sizeof(BSUIMessageData) == 0x30);
 }
