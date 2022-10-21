@@ -452,6 +452,13 @@ namespace RE
 			return func(this, a_equipIndex, a_ammo);
 		}
 
+		void SetEquippedItem(Actor* a, BGSObjectInstance& instance, const BGSEquipSlot* slot)
+		{
+			using func_t = decltype(&AIProcess::SetEquippedItem);
+			REL::Relocation<func_t> func{ REL::ID(1200276) };
+			return func(this, a, instance, slot);
+		}
+
 		//Flag should be 0x35
 		void PlayIdle(Actor* a, uint32_t flag, TESIdleForm* idle, bool unk01 = true, uint64_t unk02 = 0)
 		{
@@ -464,6 +471,13 @@ namespace RE
 		{
 			using func_t = decltype(&AIProcess::RequestLoadAnimationsForWeaponChange);
 			REL::Relocation<func_t> func{ REL::ID(666002) };
+			return func(this, a_actor);
+		}
+
+		bool IsWeaponSubgraphFinishedLoading(Actor& a_actor)
+		{
+			using func_t = decltype(&AIProcess::IsWeaponSubgraphFinishedLoading);
+			REL::Relocation<func_t> func{ REL::ID(320183) };
 			return func(this, a_actor);
 		}
 
