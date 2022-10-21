@@ -13,6 +13,10 @@ namespace RE
 		{
 			return BGSKeyword::GetTypedKeywordByIndex(a_type, a_index);
 		}
+		uint16_t BGSKeywordGetIndexForTypedKeyword(BGSKeyword* a_keyword, KeywordType a_type)
+		{
+			return BGSKeyword::GetIndexForTypedKeyword(a_keyword, a_type);
+		}
 	}
 
 	std::string_view TESFullName::GetFullName(const TESForm& a_form, bool a_strict)

@@ -387,7 +387,8 @@ namespace RE
 
 	namespace EffectArchetypes
 	{
-		enum class ArchetypeID {
+		enum class ArchetypeID
+		{
 			Absorb,
 			AccumulateMagnitude,
 			Banish,
@@ -810,6 +811,21 @@ namespace RE
 			} else {
 				return std::nullopt;
 			}
+		}
+
+		[[nodiscard]] static uint16_t GetIndexForTypedKeyword(const BGSKeyword* a_keyword, KeywordType a_type)
+		{
+			assert(a_type < KeywordType::kTotal);
+			const auto keywords = GetTypedKeywords();
+			if (keywords) {
+				const auto& arr = (*keywords)[stl::to_underlying(a_type)];
+				for (uint16_t i = 0; i < arr.size(); ++i) {
+					if (arr[i] == a_keyword) {
+						return i;
+					}
+				}
+			}
+			return 0xFFFF;
 		}
 
 		// members
@@ -1316,7 +1332,8 @@ namespace RE
 			return func(this);
 		}
 
-		[[nodiscard]] bhkWorld* GetbhkWorld() const {
+		[[nodiscard]] bhkWorld* GetbhkWorld() const
+		{
 			using func_t = decltype(&TESObjectCELL::GetbhkWorld);
 			REL::Relocation<func_t> func{ REL::ID(1326073) };
 			return func(this);
@@ -1774,23 +1791,24 @@ namespace RE
 	};
 	static_assert(sizeof(BGSPerk) == 0x98);
 
-	class BGSBodyPart {
+	class BGSBodyPart
+	{
 	public:
-		BSFixedString PartNode;					//00
-		BSFixedString VATSTarget;				//08
-		BSFixedString TwistVariation;			//10
-		BSFixedString HitReactionStart;			//18
-		BSFixedString HitReactionEnd;			//20
-		BSFixedString TwistVariationX;			//28
-		BSFixedString TwistVariationY;			//30
-		BSFixedString TwistVariationZ;			//38
-		BSFixedString unk40;					//40
-		BSFixedString GoreEffectsTargetBone;	//48
-		void* TESModelVTable;					//50
-		BSFixedString LimbReplacementModel;		//58
-		void* TextureFileHashes;				//60
-		void* MaterialRelated;					//68
-		uint64_t unk70;							//70
+		BSFixedString PartNode;               //00
+		BSFixedString VATSTarget;             //08
+		BSFixedString TwistVariation;         //10
+		BSFixedString HitReactionStart;       //18
+		BSFixedString HitReactionEnd;         //20
+		BSFixedString TwistVariationX;        //28
+		BSFixedString TwistVariationY;        //30
+		BSFixedString TwistVariationZ;        //38
+		BSFixedString unk40;                  //40
+		BSFixedString GoreEffectsTargetBone;  //48
+		void* TESModelVTable;                 //50
+		BSFixedString LimbReplacementModel;   //58
+		void* TextureFileHashes;              //60
+		void* MaterialRelated;                //68
+		uint64_t unk70;                       //70
 	};
 
 	class __declspec(novtable) BGSBodyPartData :
@@ -1802,8 +1820,9 @@ namespace RE
 		static constexpr auto RTTI{ RTTI::BGSBodyPartData };
 		static constexpr auto VTABLE{ VTABLE::BGSBodyPartData };
 		static constexpr auto FORM_ID{ ENUM_FORM_ID::kBPTD };
-		
-		enum PartType {
+
+		enum PartType
+		{
 			Torso,
 			Head1,
 			Eye,
@@ -2174,10 +2193,18 @@ namespace RE
 		static constexpr auto VTABLE{ VTABLE::BGSMessage };
 		static constexpr auto FORM_ID{ ENUM_FORM_ID::kMESG };
 
-		uint32_t GetConvertedDescription(BSFixedString& a_result) {
+		uint32_t GetConvertedDescription(BSFixedString& a_result)
+		{
 			using func_t = decltype(&BGSMessage::GetConvertedDescription);
 			REL::Relocation<func_t> func{ REL::ID(8331) };
 			return func(this, a_result);
+		}
+
+		void AddButton(MESSAGEBOX_BUTTON* btn)
+		{
+			using func_t = decltype(&BGSMessage::AddButton);
+			REL::Relocation<func_t> func{ REL::ID(236744) };
+			return func(this, btn);
 		}
 
 		// members
