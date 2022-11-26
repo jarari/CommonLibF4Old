@@ -831,7 +831,7 @@ namespace RE
 			return func(this, a_action, a_target);
 		}
 
-		void SetGunState(uint32_t gun_state, bool unk = true)
+		void SetGunState(GUN_STATE gun_state, bool unk = true)
 		{
 			using func_t = decltype(&Actor::SetGunState);
 			REL::Relocation<func_t> func{ REL::ID(977675) };
