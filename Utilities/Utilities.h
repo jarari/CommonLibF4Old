@@ -130,6 +130,12 @@ namespace RE {
 			REL::Relocation<func_t> func{ REL::ID(635042) };
 			return func(this, count, item, countComponent);
 		}
+
+		void UpdateReference3D() {
+			using func_t = decltype(&RE::TESObjectREFREx::UpdateReference3D);
+			REL::Relocation<func_t> func{ REL::ID(1568075) };
+			return func(this);
+		}
 	};
 
 	class ActorEx : public Actor {
@@ -156,6 +162,39 @@ namespace RE {
 			using func_t = decltype(&RE::ActorEx::GetDesiredSpeed);
 			REL::Relocation<func_t> func{ REL::ID(106892) };
 			return func(this);
+		}
+	};
+
+	namespace BGSMod {
+		namespace Attachment {
+			class ModEx : public Mod {
+			public:
+				TESObjectMISC* GetLooseMod() {
+					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::GetLooseMod);
+					REL::Relocation<func_t> func{ REL::ID(1359613) };
+					return func(this);
+				}
+				void SetLooseMod(TESObjectMISC* misc) {
+					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::SetLooseMod);
+					REL::Relocation<func_t> func{ REL::ID(123132) };
+					return func(this, misc);
+				}
+			};
+		}
+	}
+
+	class BGSObjectInstanceExtraEx : public BGSObjectInstanceExtra {
+	public:
+		static bool AttachModToReference(TESObjectREFR& ref, BGSMod::Attachment::Mod& mod, std::uint8_t a_attachIndex, std::uint8_t a_rank) {
+			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::AttachModToReference);
+			REL::Relocation<func_t> func{ REL::ID(3303) };
+			return func(ref, mod, a_attachIndex, a_rank);
+		}
+
+		bool HasMod(const BGSMod::Attachment::Mod& mod) {
+			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::HasMod);
+			REL::Relocation<func_t> func{ REL::ID(963890) };
+			return func(this, mod);
 		}
 	};
 
@@ -204,10 +243,11 @@ namespace RE {
 	};
 
 	struct TESEquipEvent {
-		Actor* a;					//00
-		uint32_t formId;			//0C
-		uint32_t unk08;				//08
-		uint64_t flag;				//10 0x00000000ff000000 for unequip
+		Actor* a;
+		uint32_t formId;
+		uint32_t refFormID;
+		uint16_t unk10;
+		bool isEquip;
 	};
 
 	struct PlayerAmmoCountEvent {
@@ -285,11 +325,19 @@ namespace RE {
 	struct VATSCommand;
 	class HitData {
 	public:
+		void SetAllDamageToZero() {
+			flags &= 0xFFFFFE07;
+			calculatedBaseDamage = 0.f;
+			blockedDamage = 0.f;
+			reducedDamage = 0.f;
+			blockStaggerMult = 0.f;
+		}
+
 		DamageImpactData impactData;
 		int8_t gap38[8];
-		uint32_t attackerHandle;
-		uint32_t victimHandle;
-		uint32_t sourceHandle;
+		ObjectRefHandle attackerHandle;
+		ObjectRefHandle victimHandle;
+		ObjectRefHandle sourceHandle;
 		int8_t gap4C[4];
 		BGSAttackData* attackData;
 		BGSObjectInstance source;
@@ -332,6 +380,14 @@ namespace RE {
 		int8_t gapD1[7];
 	};
 	static_assert(sizeof(TESHitEvent) == 0x108);
+
+	namespace GameScript {
+		void PostModifyInventoryItemMod(TESObjectREFR* container, TESBoundObject* item, bool reEquip) {
+			using func_t = decltype(&RE::GameScript::PostModifyInventoryItemMod);
+			REL::Relocation<func_t> func{ REL::ID(1153963) };
+			return func(container, item, reEquip);
+		}
+	}
 }
 
 namespace F4 {
@@ -755,6 +811,8 @@ namespace F4 {
 
 	REL::Relocation<NiPoint3*> ptr_k1stPersonCameraLocation{ REL::ID(1304276) };
 
+	REL::Relocation<NiPoint3*> ptr_kCurrentWorldLoc{ REL::ID(599780) };
+
 	REL::Relocation<NiPoint3A*> ptr_PlayerAdjust{ REL::ID(988646) };
 
 	REL::Relocation<GameUIModel**> ptr_GameUIModel{ REL::ID(17419) };
@@ -854,6 +912,29 @@ SpellItem* GetSpellByFullName(std::string spellname) {
 	BSTArray<SpellItem*> spells = dh->GetFormArray<SpellItem>();
 	for (auto it = spells.begin(); it != spells.end(); ++it) {
 		if (strcmp((*it)->GetFullName(), spellname.c_str()) == 0) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+BGSMaterialType* GetMaterialTypeByName(std::string materialname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<BGSMaterialType*> materials = dh->GetFormArray<BGSMaterialType>();
+	BSFixedString matname = BSFixedString(materialname);
+	for (auto it = materials.begin(); it != materials.end(); ++it) {
+		if ((*it)->materialName == matname) {
+			return (*it);
+		}
+	}
+	return nullptr;
+}
+
+EffectSetting* GetMagicEffectByFullName(std::string effectname) {
+	TESDataHandler* dh = TESDataHandler::GetSingleton();
+	BSTArray<EffectSetting*> mgefs = dh->GetFormArray<EffectSetting>();
+	for (auto it = mgefs.begin(); it != mgefs.end(); ++it) {
+		if (strcmp((*it)->GetFullName(), effectname.c_str()) == 0) {
 			return (*it);
 		}
 	}
