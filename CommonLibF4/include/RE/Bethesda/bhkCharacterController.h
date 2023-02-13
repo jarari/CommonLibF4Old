@@ -56,6 +56,34 @@ namespace RE
 	};
 	static_assert(sizeof(hkStepInfo) == 0x10);
 
+	class hknpMotionPropertiesId
+	{
+	public:
+		enum Preset
+		{
+			STATIC = 0,  ///< No velocity allowed
+			DYNAMIC,     ///< For regular dynamic bodies, undamped and gravity factor = 1
+			KEYFRAMED,   ///< like DYNAMIC, but gravity factor = 0
+			FROZEN,      ///< like KEYFRAMED, but lots of damping
+			DEBRIS,      ///< like DYNAMIC, but aggressive deactivation
+
+			NUM_PRESETS
+		};
+	};
+
+	class hkTransformf
+	{
+	public:
+		void setIdentity()
+		{
+			m_rotation.MakeIdentity();
+			m_translation = NiPoint4();
+		}
+		NiMatrix3 m_rotation;
+		NiPoint4 m_translation;
+	};
+	typedef hkTransformf hkTransform;
+
 	class bhkNPCollisionObjectBase :
 		public NiCollisionObject  // 00
 	{
@@ -89,6 +117,41 @@ namespace RE
 			using func_t = decltype(&RE::bhkNPCollisionObject::CopyMembers);
 			REL::Relocation<func_t> func{ REL::ID(1558409) };
 			func(this, from, cp);
+		}
+
+		static bhkNPCollisionObject* Getbhk(bhkWorld* world, hknpBodyId& bodyId)
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::Getbhk);
+			REL::Relocation<func_t> func{ REL::ID(730034) };
+			return func(world, bodyId);
+		}
+
+		void SetMotionType(hknpMotionPropertiesId::Preset type)
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::SetMotionType);
+			REL::Relocation<func_t> func{ REL::ID(200912) };
+			return func(this, type);
+		}
+
+		bool GetTransform(hkTransformf& transform)
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::GetTransform);
+			REL::Relocation<func_t> func{ REL::ID(1508189) };
+			return func(this, transform);
+		}
+
+		bool SetTransform(hkTransformf& transform)
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::SetTransform);
+			REL::Relocation<func_t> func{ REL::ID(178085) };
+			return func(this, transform);
+		}
+
+		hknpShape* GetShape()
+		{
+			using func_t = decltype(&RE::bhkNPCollisionObject::GetShape);
+			REL::Relocation<func_t> func{ REL::ID(315427) };
+			return func(this);
 		}
 
 		// members
