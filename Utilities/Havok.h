@@ -73,6 +73,18 @@ namespace RE {
 			REL::Relocation<func_t> func{ REL::ID(485648) };
 			return func(this);
 		}
+
+		void MarkForWrite() {
+			using func_t = decltype(&RE::hknpBSWorld::MarkForWrite);
+			REL::Relocation<func_t> func{ REL::ID(1017544) };
+			return func(this);
+		}
+
+		void UnmarkForWrite() {
+			using func_t = decltype(&RE::hknpBSWorld::UnmarkForWrite);
+			REL::Relocation<func_t> func{ REL::ID(312883) };
+			return func(this);
+		}
 	};
 
 	struct hknpThreadSafetyCheck {
@@ -202,17 +214,6 @@ namespace RE {
 		bool unk1F;
 		uint64_t unk20;
 	};
-
-	class hkTransformf {
-	public:
-		void setIdentity() {
-			m_rotation.MakeIdentity();
-			m_translation = hkVector4f();
-		}
-		NiMatrix3 m_rotation;
-		hkVector4f m_translation;
-	};
-	typedef hkTransformf hkTransform;
 
 	struct hkAabb16 {
 	public:
