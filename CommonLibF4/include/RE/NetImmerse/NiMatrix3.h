@@ -17,7 +17,8 @@ namespace RE
 		// members
 		NiPoint4 entry[3];  // 00
 
-		NiMatrix3 operator* (const NiMatrix3& rhs) const {
+		NiMatrix3 operator*(const NiMatrix3& rhs) const
+		{
 			NiMatrix3 tmp;
 			tmp.entry[0].pt[0] =
 				entry[0].pt[0] * rhs.entry[0].pt[0] +
@@ -58,7 +59,8 @@ namespace RE
 			return tmp;
 		}
 
-		NiMatrix3 operator* (float scalar) const {
+		NiMatrix3 operator*(float scalar) const
+		{
 			NiMatrix3 result;
 			result.entry[0].pt[0] = entry[0].pt[0] * scalar;
 			result.entry[0].pt[1] = entry[0].pt[1] * scalar;
@@ -72,13 +74,19 @@ namespace RE
 			return result;
 		}
 
-		NiPoint3 operator* (const NiPoint3& p) const {
-			return NiPoint3
-			(
+		NiPoint3 operator*(const NiPoint3& p) const
+		{
+			return NiPoint3(
 				entry[0].pt[0] * p.x + entry[0].pt[1] * p.y + entry[0].pt[2] * p.z,
 				entry[1].pt[0] * p.x + entry[1].pt[1] * p.y + entry[1].pt[2] * p.z,
-				entry[2].pt[0] * p.x + entry[2].pt[1] * p.y + entry[2].pt[2] * p.z
-			);
+				entry[2].pt[0] * p.x + entry[2].pt[1] * p.y + entry[2].pt[2] * p.z);
+		}
+
+		bool ToEulerAnglesXYZ(float& x, float& y, float& z)
+		{
+			using func_t = decltype(&NiMatrix3::ToEulerAnglesXYZ);
+			REL::Relocation<func_t> func{ REL::ID(34114) };
+			return func(this, x, y, z);
 		}
 	};
 	static_assert(sizeof(NiMatrix3) == 0x30);
