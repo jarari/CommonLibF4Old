@@ -1,5 +1,6 @@
 #pragma once
 #include "RE/Bethesda/TESDataHandler.h"
+#include <Havok.h>
 #include <Windows.h>
 using namespace RE;
 #pragma region Utilities
@@ -136,6 +137,12 @@ namespace RE {
 			REL::Relocation<func_t> func{ REL::ID(1568075) };
 			return func(this);
 		}
+
+		void GetObjectCenter(NiPoint3& center) {
+			using func_t = decltype(&RE::TESObjectREFREx::GetObjectCenter);
+			REL::Relocation<func_t> func{ REL::ID(777738) };
+			return func(this, center);
+		}
 	};
 
 	class ActorEx : public Actor {
@@ -152,6 +159,12 @@ namespace RE {
 			return func(this);
 		}
 
+		CFilter GetCollisionFilter() {
+			using func_t = decltype(&RE::ActorEx::GetCollisionFilter);
+			REL::Relocation<func_t> func{ REL::ID(1474995) };
+			return func(this);
+		}
+
 		bool GetCurrentFireLocation(BGSEquipIndex index, NiPoint3& out) {
 			using func_t = decltype(&RE::ActorEx::GetCurrentFireLocation);
 			REL::Relocation<func_t> func{ REL::ID(663107) };
@@ -162,6 +175,18 @@ namespace RE {
 			using func_t = decltype(&RE::ActorEx::GetDesiredSpeed);
 			REL::Relocation<func_t> func{ REL::ID(106892) };
 			return func(this);
+		}
+
+		NiAVObject* GetClosestBone(NiPoint3 pos, NiPoint3 dir) {
+			using func_t = decltype(&RE::ActorEx::GetClosestBone);
+			REL::Relocation<func_t> func{ REL::ID(1180004) };
+			return func(this, pos, dir);
+		}
+
+		bhkCharacterController* Move(float deltaTime, NiPoint3 deltaPos, bool unk) {
+			using func_t = decltype(&RE::ActorEx::Move);
+			REL::Relocation<func_t> func{ REL::ID(737625) };
+			return func(this, deltaTime, deltaPos, unk);
 		}
 	};
 
@@ -227,6 +252,16 @@ namespace RE {
 		uint64_t		unk58;		// 58
 		uint32_t		unk60;		// 60 - copytype? 0, 1, 2
 		uint32_t		unk64;		// 64
+	};
+
+	class NiStringExtraData : public NiExtraData {
+	public:
+		static constexpr auto RTTI{ RTTI::NiStringExtraData };
+		static constexpr auto VTABLE{ VTABLE::NiStringExtraData };
+		static constexpr auto Ni_RTTI{ Ni_RTTI::NiStringExtraData };
+
+		BSFixedString data;			//0x18
+
 	};
 
 	struct ActorEquipManagerEvent::Event {
@@ -618,6 +653,18 @@ namespace F4 {
 			return func(this);
 		}
 
+		NiAVObject* GetNiAVObject() {
+			using func_t = decltype(&F4::bhkPickData::GetNiAVObject);
+			REL::Relocation<func_t> func{ REL::ID(863406) };
+			return func(this);
+		}
+
+		hknpBody* GetBody() {
+			using func_t = decltype(&F4::bhkPickData::GetBody);
+			REL::Relocation<func_t> func{ REL::ID(1223055) };
+			return func(this);
+		}
+
 		uint8_t pad[0xE0];
 		F4_HEAP_REDEFINE_ALIGNED_NEW(bhkPickData);
 	};
@@ -684,6 +731,14 @@ namespace F4 {
 		};
 	};
 
+	namespace bhkUtilFunctions {
+		inline bhkNPCollisionObject* FindFirstCollisionObject(NiAVObject* node) {
+			using func_t = decltype(&FindFirstCollisionObject);
+			REL::Relocation<func_t> func{ REL::ID(507243) };
+			return func(node);
+		}
+	}
+
 	namespace JobListManager {
 		REL::Relocation<BSJobs::JobList**> ptr_pPostPhysicsUpdateJobList{ REL::ID(1183305) };
 	}
@@ -709,8 +764,8 @@ namespace F4 {
 			return func(a, proj, speed, launchPos, targetPos, hitPos, collidee, dist);
 		}
 
-		inline bhkNPCollisionObject* CalculateProjectileLOS(Actor* a, BGSProjectile* proj, bhkPickData& pick) {
-			typedef bhkNPCollisionObject* func_t(Actor*, BGSProjectile*, bhkPickData&);
+		inline bool CalculateProjectileLOS(Actor* a, BGSProjectile* proj, bhkPickData& pick) {
+			typedef bool func_t(Actor*, BGSProjectile*, bhkPickData&);
 			REL::Relocation<func_t> func{ REL::ID(55339) };
 			return func(a, proj, pick);
 		}
@@ -816,9 +871,12 @@ namespace F4 {
 	REL::Relocation<NiPoint3A*> ptr_PlayerAdjust{ REL::ID(988646) };
 
 	REL::Relocation<GameUIModel**> ptr_GameUIModel{ REL::ID(17419) };
+
+	class NiCamera;
+	REL::Relocation<NiCamera*> ptr_sp1stPersonCamera{ REL::ID(380177) };
 }
 
-char tempbuf[8192] = { 0 };
+char tempbuf[512] = { 0 };
 char* _MESSAGE(const char* fmt, ...) {
 	va_list args;
 
@@ -1010,7 +1068,7 @@ NiNode* CreateBone(const char* name) {
 }
 
 bool CheckPA(Actor* a) {
-	if (!a->extraList) {
+	if (!a || !a->extraList) {
 		return false;
 	}
 	return a->extraList->HasType(EXTRA_DATA_TYPE::kPowerArmor);;
@@ -1102,6 +1160,78 @@ std::string SplitString(const std::string str, const std::string delimiter, std:
 
 	ret = str.substr(0, i);
 	remainder = str.substr(i + 1);
+	return ret;
+}
+
+bool GetPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick, bool excludeActor = true) {
+	if (!a->parentCell)
+		return false;
+	bhkWorld* world = a->parentCell->GetbhkWorld();
+	if (!world)
+		return false;
+	hknpBSWorld* hkWorld = *(hknpBSWorld**)((uintptr_t)world + 0x60);
+	if (!hkWorld)
+		return false;
+
+	bool ret = false;
+	pick.SetStartEnd(start, end);
+	/*hknpAllHitsCollector collector = hknpAllHitsCollector();
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
+	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;*/
+	hknpClosestHitCollector *collector = new hknpClosestHitCollector();
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
+	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;
+	uint32_t index = 6;
+	uint64_t flag = 0x1C15160;
+	if (projForm && projForm->data.collisionLayer) {
+		index = projForm->data.collisionLayer->collisionIdx;
+		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
+			flag = 0x15C15160;
+	}
+	uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
+	*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
+	if (excludeActor) {
+		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
+	}
+	hkWorld->MarkForRead();
+	ret = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
+	hkWorld->UnmarkForRead();
+	return ret;
+}
+
+bool GetPickDataAll(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick, bool excludeActor = true) {
+	if (!a->parentCell)
+		return false;
+	bhkWorld* world = a->parentCell->GetbhkWorld();
+	if (!world)
+		return false;
+	hknpBSWorld* hkWorld = *(hknpBSWorld**)((uintptr_t)world + 0x60);
+	if (!hkWorld)
+		return false;
+
+	bool ret = false;
+	pick.SetStartEnd(start, end);
+	hknpAllHitsCollector *collector = new hknpAllHitsCollector();
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
+	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 0;
+	uint32_t index = 6;
+	uint64_t flag = 0x1C15160;
+	if (projForm && projForm->data.collisionLayer) {
+		index = projForm->data.collisionLayer->collisionIdx;
+		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
+			flag = 0x15C15160;
+	}
+	uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
+	*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
+	if (excludeActor) {
+		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
+	}
+	if (excludeActor) {
+		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
+	}
+	hkWorld->MarkForRead();
+	ret = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
+	hkWorld->UnmarkForRead();
 	return ret;
 }
 
