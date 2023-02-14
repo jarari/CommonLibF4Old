@@ -143,6 +143,12 @@ namespace RE {
 			REL::Relocation<func_t> func{ REL::ID(777738) };
 			return func(this, center);
 		}
+
+		void SetScale(float scale) {
+			using func_t = decltype(&RE::TESObjectREFREx::SetScale);
+			REL::Relocation<func_t> func{ REL::ID(817930) };
+			return func(this, scale);
+		}
 	};
 
 	class ActorEx : public Actor {
