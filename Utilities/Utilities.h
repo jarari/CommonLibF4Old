@@ -611,12 +611,6 @@ namespace F4 {
 			func(this);
 		}
 
-		~bhkPickData() {
-			typedef bhkPickData* func_t(bhkPickData*);
-			REL::Relocation<func_t> func{ REL::ID(109425) };
-			func(this);
-		}
-
 		void SetStartEnd(const NiPoint3& start, const NiPoint3& end) {
 			using func_t = decltype(&F4::bhkPickData::SetStartEnd);
 			REL::Relocation<func_t> func{ REL::ID(747470) };
@@ -822,6 +816,42 @@ namespace F4 {
 		BSTArray<EventSource<void*>*> eventSources;       // 18
 	};
 
+	struct Expression {
+		float exp[54];
+	};
+
+	namespace FaceEmotionalIdles {
+		struct InstanceData {
+			uint32_t pad00;
+			uint32_t handle;
+			uint32_t pad08;
+			float blinkTimer;
+			float lidFollowEyes;
+			uint64_t pad18;
+			uint64_t pad20;
+			uint32_t unk28;
+			uint32_t pad2C;
+			BSFixedString archeType;
+		};
+	};
+	static_assert(sizeof(FaceEmotionalIdles::InstanceData) == 0x38);
+
+	struct BSFaceGenAnimationData : public NiExtraData {
+		Expression currExp;
+		Expression modExp;
+		Expression baseExp;
+		FaceEmotionalIdles::InstanceData instanceData;
+	};
+	static_assert(sizeof(BSFaceGenAnimationData) == 0x2D8);
+
+	struct EmotionalStateMachine {
+		uint32_t unk00;
+		uint32_t numEmotions;
+		BSFixedString* emotionNames;
+		Expression* emotionMorphs;
+	};
+	static_assert(sizeof(EmotionalStateMachine) == 0x18);
+
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
 		REL::Relocation<func_t> func{ REL::ID(376497) };
@@ -880,6 +910,10 @@ namespace F4 {
 
 	class NiCamera;
 	REL::Relocation<NiCamera*> ptr_sp1stPersonCamera{ REL::ID(380177) };
+
+	REL::Relocation<EmotionalStateMachine*> ptr_emotionalStateMachine{ REL::ID(155349) };
+
+	REL::Relocation<uintptr_t*> ptr_emotionalStates{ REL::ID(1380996) };
 }
 
 char tempbuf[512] = { 0 };
@@ -1184,8 +1218,8 @@ bool GetPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjec
 	/*hknpAllHitsCollector collector = hknpAllHitsCollector();
 	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
 	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;*/
-	hknpClosestHitCollector *collector = new hknpClosestHitCollector();
-	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
+	hknpClosestHitCollector collector = hknpClosestHitCollector();
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
 	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;
 	uint32_t index = 6;
 	uint64_t flag = 0x1C15160;
@@ -1217,8 +1251,8 @@ bool GetPickDataAll(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSPro
 
 	bool ret = false;
 	pick.SetStartEnd(start, end);
-	hknpAllHitsCollector *collector = new hknpAllHitsCollector();
-	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)collector;
+	hknpAllHitsCollector collector = hknpAllHitsCollector();
+	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
 	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 0;
 	uint32_t index = 6;
 	uint64_t flag = 0x1C15160;
