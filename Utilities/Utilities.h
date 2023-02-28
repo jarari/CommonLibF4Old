@@ -5,432 +5,6 @@
 using namespace RE;
 #pragma region Utilities
 
-namespace RE {
-	enum class EShaderPropertyFlag : std::uint64_t {
-		kSpecular = 1i64 << 0,
-		kSkinned = 1i64 << 1,
-		kTempRefraction = 1i64 << 2,
-		kVertexAlpha = 1i64 << 3,
-		kGrayscaleToPaletteColor = 1i64 << 4,
-		kGrayscaleToPaletteAlpha = 1i64 << 5,
-		kFalloff = 1i64 << 6,
-		kEnvMap = 1i64 << 7,
-		kRGBFalloff = 1i64 << 8,
-		kCastShadows = 1i64 << 9,
-		kFace = 1i64 << 10,
-		kUIMaskRects = 1i64 << 11,
-		kModelSpaceNormals = 1i64 << 12,
-		kRefractionClamp = 1i64 << 13,
-		kMultiTextureLandscape = 1i64 << 14,
-		kRefraction = 1i64 << 15,
-		kRefractionFalloff = 1i64 << 16,
-		kEyeReflect = 1i64 << 17,
-		kHairTint = 1i64 << 18,
-		kScreendoorAlphaFade = 1i64 << 19,
-		kLocalMapClear = 1i64 << 20,
-		kFaceGenRGBTint = 1i64 << 21,
-		kOwnEmit = 1i64 << 22,
-		kProjectedUV = 1i64 << 23,
-		kMultipleTextures = 1i64 << 24,
-		kTesselate = 1i64 << 25,
-		kDecal = 1i64 << 26,
-		kDynamicDecal = 1i64 << 27,
-		kCharacterLight = 1i64 << 28,
-		kExternalEmittance = 1i64 << 29,
-		kSoftEffect = 1i64 << 30,
-		kZBufferTest = 1i64 << 31,
-		kZBufferWrite = 1i64 << 32,
-		kLODLandscape = 1i64 << 33,
-		kLODObjects = 1i64 << 34,
-		kNoFade = 1i64 << 35,
-		kTwoSided = 1i64 << 36,
-		kVertexColors = 1i64 << 37,
-		kGlowMap = 1i64 << 38,
-		kTransformChanged = 1i64 << 39,
-		kDismembermentMeatCuff = 1i64 << 40,
-		kTint = 1i64 << 41,
-		kVertexLighting = 1i64 << 42,
-		kUniformScale = 1i64 << 43,
-		kFitSlope = 1i64 << 44,
-		kBillboard = 1i64 << 45,
-		kLODLandBlend = 1i64 << 46,
-		kDismemberment = 1i64 << 47,
-		kWireframe = 1i64 << 48,
-		kWeaponBlood = 1i64 << 49,
-		kHideOnLocalMap = 1i64 << 50,
-		kPremultAlpha = 1i64 << 51,
-		kVATSTarget = 1i64 << 52,
-		kAnisotropicLighting = 1i64 << 53,
-		kSkewSpecularAlpha = 1i64 << 54,
-		kMenuScreen = 1i64 << 55,
-		kMultiLayerParallax = 1i64 << 56,
-		kAlphaTest = 1i64 << 57,
-		kInvertedFadePattern = 1i64 << 58,
-		kVATSTargetDrawAll = 1i64 << 59,
-		kPipboyScreen = 1i64 << 60,
-		kTreeAnim = 1i64 << 61,
-		kEffectLighting = 1i64 << 62,
-		kRefractionWritesDepth = 1i64 << 63
-	};
-
-	class NiUpdateData {
-	public:
-		uint32_t unk00;
-		uint32_t unk04;
-		uint64_t unk08;
-		uint64_t unk10;
-		uint32_t unk18;
-	};
-
-	class ExtraBendableSplineParams : public BSExtraData {
-	public:
-		float	unk18;		// 18
-		float	thickness;	// 1C
-		float	xOffset;	// 20
-		float	yOffset;	// 24
-		float	zOffset;	// 28
-		float	unk2C;		// 2C
-	};
-
-	class BSAnimationGraphManager {
-	public:
-		bool Activate() {
-			using func_t = decltype(&RE::BSAnimationGraphManager::Activate);
-			REL::Relocation<func_t> func{ REL::ID(950096) };
-			return func(this);
-		}
-		bool Deactivate() {
-			using func_t = decltype(&RE::BSAnimationGraphManager::Deactivate);
-			REL::Relocation<func_t> func{ REL::ID(591084) };
-			return func(this);
-		}
-	};
-
-	class TESObjectREFREx : public TESObjectREFR {
-	public:
-		void RebuildBendableSpline(bool rebuildCollision, NiAVObject* target) {
-			using func_t = decltype(&RE::TESObjectREFREx::RebuildBendableSpline);
-			REL::Relocation<func_t> func{ REL::ID(340319) };
-			return func(this, rebuildCollision, target);
-		}
-
-		void SetLocationOnReference(const NiPoint3& pos) {
-			using func_t = decltype(&RE::TESObjectREFREx::SetLocationOnReference);
-			REL::Relocation<func_t> func{ REL::ID(1101832) };
-			return func(this, pos);
-		}
-
-		void SetAngleOnReference(const NiPoint3& ang) {
-			using func_t = decltype(&RE::TESObjectREFREx::SetAngleOnReference);
-			REL::Relocation<func_t> func{ REL::ID(1049748) };
-			return func(this, ang);
-		}
-
-		bool GetItemCount(uint32_t& count, TESForm* item, bool countComponent) {
-			using func_t = decltype(&RE::TESObjectREFREx::GetItemCount);
-			REL::Relocation<func_t> func{ REL::ID(635042) };
-			return func(this, count, item, countComponent);
-		}
-
-		void UpdateReference3D() {
-			using func_t = decltype(&RE::TESObjectREFREx::UpdateReference3D);
-			REL::Relocation<func_t> func{ REL::ID(1568075) };
-			return func(this);
-		}
-
-		void GetObjectCenter(NiPoint3& center) {
-			using func_t = decltype(&RE::TESObjectREFREx::GetObjectCenter);
-			REL::Relocation<func_t> func{ REL::ID(777738) };
-			return func(this, center);
-		}
-
-		void SetScale(float scale) {
-			using func_t = decltype(&RE::TESObjectREFREx::SetScale);
-			REL::Relocation<func_t> func{ REL::ID(817930) };
-			return func(this, scale);
-		}
-	};
-
-	class ActorEx : public Actor {
-	public:
-		void GetAimVector(NiPoint3& out) {
-			using func_t = decltype(&RE::ActorEx::GetAimVector);
-			REL::Relocation<func_t> func{ REL::ID(554863) };
-			return func(this, out);
-		}
-
-		uint32_t GetCurrentCollisionGroup() {
-			using func_t = decltype(&RE::ActorEx::GetCurrentCollisionGroup);
-			REL::Relocation<func_t> func{ REL::ID(410500) };
-			return func(this);
-		}
-
-		CFilter GetCollisionFilter() {
-			using func_t = decltype(&RE::ActorEx::GetCollisionFilter);
-			REL::Relocation<func_t> func{ REL::ID(1474995) };
-			return func(this);
-		}
-
-		bool GetCurrentFireLocation(BGSEquipIndex index, NiPoint3& out) {
-			using func_t = decltype(&RE::ActorEx::GetCurrentFireLocation);
-			REL::Relocation<func_t> func{ REL::ID(663107) };
-			return func(this, index, out);
-		}
-
-		float GetDesiredSpeed() {
-			using func_t = decltype(&RE::ActorEx::GetDesiredSpeed);
-			REL::Relocation<func_t> func{ REL::ID(106892) };
-			return func(this);
-		}
-
-		NiAVObject* GetClosestBone(NiPoint3 pos, NiPoint3 dir) {
-			using func_t = decltype(&RE::ActorEx::GetClosestBone);
-			REL::Relocation<func_t> func{ REL::ID(1180004) };
-			return func(this, pos, dir);
-		}
-
-		bhkCharacterController* Move(float deltaTime, NiPoint3 deltaPos, bool unk) {
-			using func_t = decltype(&RE::ActorEx::Move);
-			REL::Relocation<func_t> func{ REL::ID(737625) };
-			return func(this, deltaTime, deltaPos, unk);
-		}
-	};
-
-	namespace BGSMod {
-		namespace Attachment {
-			class ModEx : public Mod {
-			public:
-				TESObjectMISC* GetLooseMod() {
-					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::GetLooseMod);
-					REL::Relocation<func_t> func{ REL::ID(1359613) };
-					return func(this);
-				}
-				void SetLooseMod(TESObjectMISC* misc) {
-					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::SetLooseMod);
-					REL::Relocation<func_t> func{ REL::ID(123132) };
-					return func(this, misc);
-				}
-			};
-		}
-	}
-
-	class BGSObjectInstanceExtraEx : public BGSObjectInstanceExtra {
-	public:
-		static bool AttachModToReference(TESObjectREFR& ref, BGSMod::Attachment::Mod& mod, std::uint8_t a_attachIndex, std::uint8_t a_rank) {
-			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::AttachModToReference);
-			REL::Relocation<func_t> func{ REL::ID(3303) };
-			return func(ref, mod, a_attachIndex, a_rank);
-		}
-
-		bool HasMod(const BGSMod::Attachment::Mod& mod) {
-			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::HasMod);
-			REL::Relocation<func_t> func{ REL::ID(963890) };
-			return func(this, mod);
-		}
-	};
-
-	class BGSProjectileEx : public BGSProjectile {
-	public:
-		bool CollidesWithSmallTransparentLayer() {
-			using func_t = decltype(&RE::BGSProjectileEx::CollidesWithSmallTransparentLayer);
-			REL::Relocation<func_t> func{ REL::ID(1115694) };
-			return func(this);
-		}
-	};
-
-	class NiPoint3Ex : public NiPoint3 {
-	public:
-		float GetZAngleFromVector() {
-			using func_t = decltype(&RE::NiPoint3Ex::GetZAngleFromVector);
-			REL::Relocation<func_t> func{ REL::ID(1450064) };
-			return func(this);
-		}
-	};
-
-	class NiCloningProcess {
-	public:
-		BSTHashMap<void*, void*>	unk00;	// 00
-		void* unk30;	// 30
-		uint64_t		unk38;		// 38
-		uint64_t		unk40;		// 40
-		void* unk48;	// 48 - DEADBEEF
-		void* unk50;	// 50 - bucket
-		uint64_t		unk58;		// 58
-		uint32_t		unk60;		// 60 - copytype? 0, 1, 2
-		uint32_t		unk64;		// 64
-	};
-
-	class NiStringExtraData : public NiExtraData {
-	public:
-		static constexpr auto RTTI{ RTTI::NiStringExtraData };
-		static constexpr auto VTABLE{ VTABLE::NiStringExtraData };
-		static constexpr auto Ni_RTTI{ Ni_RTTI::NiStringExtraData };
-
-		BSFixedString data;			//0x18
-
-	};
-
-	struct ActorEquipManagerEvent::Event {
-		uint32_t unk00;				//00
-		uint8_t pad04[0x7 - 0x4];	//04
-		bool isUnequip;				//07
-		void* unk08;				//08	
-		Actor* a;					//10	equip target
-	};
-
-	struct TESObjectLoadedEvent {
-		uint32_t formId;			//00
-		uint8_t loaded;				//08
-	};
-
-	struct TESEquipEvent {
-		Actor* a;
-		uint32_t formId;
-		uint32_t refFormID;
-		uint16_t unk10;
-		bool isEquip;
-	};
-
-	struct PlayerAmmoCountEvent {
-		uint32_t current;
-		uint32_t total;
-	};
-
-	struct BSTransformDeltaEvent {
-		NiMatrix3 deltaRotation;
-		NiPoint4 deltaTranslation;
-		NiPoint4 previousTranslation;
-		NiPoint4 previousRotation;
-		NiPoint4 previousScale;
-		NiPoint4 currentTranslation;
-		NiPoint4 currentRotation;
-		NiPoint4 currentScale;
-	};
-
-	struct TESLoadGameEvent {};
-
-	class HitEventSource : public BSTEventSource<TESHitEvent> {
-	public:
-		[[nodiscard]] static HitEventSource* GetSingleton() {
-			REL::Relocation<HitEventSource*> singleton{ REL::ID(989868) };
-			return singleton.get();
-		}
-	};
-
-	class ObjectLoadedEventSource : public BSTEventSource<TESObjectLoadedEvent> {
-	public:
-		[[nodiscard]] static ObjectLoadedEventSource* GetSingleton() {
-			REL::Relocation<ObjectLoadedEventSource*> singleton{ REL::ID(416662) };
-			return singleton.get();
-		}
-	};
-
-	class EquipEventSource : public BSTEventSource<TESEquipEvent> {
-	public:
-		[[nodiscard]] static EquipEventSource* GetSingleton() {
-			REL::Relocation<EquipEventSource*> singleton{ REL::ID(485633) };
-			return singleton.get();
-		}
-	};
-
-	class MGEFApplyEventSource : public BSTEventSource<TESMagicEffectApplyEvent> {
-	public:
-		[[nodiscard]] static MGEFApplyEventSource* GetSingleton() {
-			REL::Relocation<MGEFApplyEventSource*> singleton{ REL::ID(1481228) };
-			return singleton.get();
-		}
-	};
-
-	namespace LoadGameEventSource {
-		[[nodiscard]] BSTEventSource<TESLoadGameEvent>* GetSingleton() {
-			using func_t = decltype(&RE::LoadGameEventSource::GetSingleton);
-			REL::Relocation<func_t> func{ REL::ID(823570) };
-			return func();
-		}
-	};
-
-	BSLightingShaderProperty* FindPerPixelLighting(NiNode* node) {
-		using func_t = decltype(&RE::FindPerPixelLighting);
-		REL::Relocation<func_t> func{ REL::ID(1287682) };
-		return func(node);
-	}
-
-	struct DamageImpactData {
-		NiPoint4 hitPos;
-		NiPoint4 hitDirection;
-		NiPoint4 projectileDir;
-		bhkNPCollisionObject* collisionObj;
-	};
-	static_assert(sizeof(DamageImpactData) == 0x38);
-
-	struct VATSCommand;
-	class HitData {
-	public:
-		void SetAllDamageToZero() {
-			flags &= 0xFFFFFE07;
-			calculatedBaseDamage = 0.f;
-			blockedDamage = 0.f;
-			reducedDamage = 0.f;
-			blockStaggerMult = 0.f;
-		}
-
-		DamageImpactData impactData;
-		int8_t gap38[8];
-		ObjectRefHandle attackerHandle;
-		ObjectRefHandle victimHandle;
-		ObjectRefHandle sourceHandle;
-		int8_t gap4C[4];
-		BGSAttackData* attackData;
-		BGSObjectInstance source;
-		MagicItem* effect;
-		SpellItem* spellItem;
-		VATSCommand* VATSCommand;
-		TESAmmo* ammo;
-		BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* damageTypes;
-		float calculatedBaseDamage;
-		float baseDamage;
-		float totalDamage;
-		float blockedDamage;
-		float blockMult;
-		float reducedDamage;
-		float field_A8;
-		float blockStaggerMult;
-		float sneakAttackMult;
-		float field_B4;
-		float field_B8;
-		float field_BC;
-		float criticalDamageMult;
-		uint32_t flags;
-		BGSEquipIndex equipIndex;
-		uint32_t materialType;
-		int32_t bodypartType;
-		int8_t gapD4[4];
-	};
-	static_assert(sizeof(HitData) == 0xD8);
-
-	class TESHitEvent {
-	public:
-		HitData hitdata;
-		int8_t gapD8[8];
-		TESObjectREFR* victim;
-		TESObjectREFR* attacker;
-		BSFixedString matName;
-		uint32_t sourceFormID;
-		uint32_t projFormID;
-		bool hasHitData;
-		int8_t gapD1[7];
-	};
-	static_assert(sizeof(TESHitEvent) == 0x108);
-
-	namespace GameScript {
-		void PostModifyInventoryItemMod(TESObjectREFR* container, TESBoundObject* item, bool reEquip) {
-			using func_t = decltype(&RE::GameScript::PostModifyInventoryItemMod);
-			REL::Relocation<func_t> func{ REL::ID(1153963) };
-			return func(container, item, reEquip);
-		}
-	}
-}
-
 namespace F4 {
 
 	//https://github.com/hexabits/nifskope/blob/develop/src/data/niftypes.h
@@ -666,7 +240,7 @@ namespace F4 {
 		}
 
 		uint8_t pad[0xE0];
-		F4_HEAP_REDEFINE_ALIGNED_NEW(bhkPickData);
+		F4_HEAP_REDEFINE_NEW(bhkPickData);
 	};
 	static_assert(sizeof(bhkPickData) == 0xE0);
 
@@ -852,6 +426,15 @@ namespace F4 {
 	};
 	static_assert(sizeof(EmotionalStateMachine) == 0x18);
 
+	class TES {
+	public:
+		NiAVObject* Pick(bhkPickData& pd) {
+			using func_t = decltype(&TES::Pick);
+			REL::Relocation<func_t> func{ REL::ID(1003392) };
+			return func(this, pd);
+		}
+	};
+
 	bool PlaySound(BGSSoundDescriptorForm* sndr, NiPoint3 pos, NiAVObject* node) {
 		typedef bool* func_t(Unk, BGSSoundDescriptorForm*, NiPoint3, NiAVObject*);
 		REL::Relocation<func_t> func{ REL::ID(376497) };
@@ -914,6 +497,454 @@ namespace F4 {
 	REL::Relocation<EmotionalStateMachine*> ptr_emotionalStateMachine{ REL::ID(155349) };
 
 	REL::Relocation<uintptr_t*> ptr_emotionalStates{ REL::ID(1380996) };
+
+	REL::Relocation<TES*> ptr_TES{ REL::ID(1194835) };
+}
+
+namespace RE {
+	enum class EShaderPropertyFlag : std::uint64_t {
+		kSpecular = 1i64 << 0,
+		kSkinned = 1i64 << 1,
+		kTempRefraction = 1i64 << 2,
+		kVertexAlpha = 1i64 << 3,
+		kGrayscaleToPaletteColor = 1i64 << 4,
+		kGrayscaleToPaletteAlpha = 1i64 << 5,
+		kFalloff = 1i64 << 6,
+		kEnvMap = 1i64 << 7,
+		kRGBFalloff = 1i64 << 8,
+		kCastShadows = 1i64 << 9,
+		kFace = 1i64 << 10,
+		kUIMaskRects = 1i64 << 11,
+		kModelSpaceNormals = 1i64 << 12,
+		kRefractionClamp = 1i64 << 13,
+		kMultiTextureLandscape = 1i64 << 14,
+		kRefraction = 1i64 << 15,
+		kRefractionFalloff = 1i64 << 16,
+		kEyeReflect = 1i64 << 17,
+		kHairTint = 1i64 << 18,
+		kScreendoorAlphaFade = 1i64 << 19,
+		kLocalMapClear = 1i64 << 20,
+		kFaceGenRGBTint = 1i64 << 21,
+		kOwnEmit = 1i64 << 22,
+		kProjectedUV = 1i64 << 23,
+		kMultipleTextures = 1i64 << 24,
+		kTesselate = 1i64 << 25,
+		kDecal = 1i64 << 26,
+		kDynamicDecal = 1i64 << 27,
+		kCharacterLight = 1i64 << 28,
+		kExternalEmittance = 1i64 << 29,
+		kSoftEffect = 1i64 << 30,
+		kZBufferTest = 1i64 << 31,
+		kZBufferWrite = 1i64 << 32,
+		kLODLandscape = 1i64 << 33,
+		kLODObjects = 1i64 << 34,
+		kNoFade = 1i64 << 35,
+		kTwoSided = 1i64 << 36,
+		kVertexColors = 1i64 << 37,
+		kGlowMap = 1i64 << 38,
+		kTransformChanged = 1i64 << 39,
+		kDismembermentMeatCuff = 1i64 << 40,
+		kTint = 1i64 << 41,
+		kVertexLighting = 1i64 << 42,
+		kUniformScale = 1i64 << 43,
+		kFitSlope = 1i64 << 44,
+		kBillboard = 1i64 << 45,
+		kLODLandBlend = 1i64 << 46,
+		kDismemberment = 1i64 << 47,
+		kWireframe = 1i64 << 48,
+		kWeaponBlood = 1i64 << 49,
+		kHideOnLocalMap = 1i64 << 50,
+		kPremultAlpha = 1i64 << 51,
+		kVATSTarget = 1i64 << 52,
+		kAnisotropicLighting = 1i64 << 53,
+		kSkewSpecularAlpha = 1i64 << 54,
+		kMenuScreen = 1i64 << 55,
+		kMultiLayerParallax = 1i64 << 56,
+		kAlphaTest = 1i64 << 57,
+		kInvertedFadePattern = 1i64 << 58,
+		kVATSTargetDrawAll = 1i64 << 59,
+		kPipboyScreen = 1i64 << 60,
+		kTreeAnim = 1i64 << 61,
+		kEffectLighting = 1i64 << 62,
+		kRefractionWritesDepth = 1i64 << 63
+	};
+
+	class NiUpdateData {
+	public:
+		uint32_t unk00;
+		uint32_t unk04;
+		uint64_t unk08;
+		uint64_t unk10;
+		uint32_t unk18;
+	};
+
+	class ExtraBendableSplineParams : public BSExtraData {
+	public:
+		float	unk18;		// 18
+		float	thickness;	// 1C
+		float	xOffset;	// 20
+		float	yOffset;	// 24
+		float	zOffset;	// 28
+		float	unk2C;		// 2C
+	};
+
+	class BSAnimationGraphManager {
+	public:
+		bool Activate() {
+			using func_t = decltype(&RE::BSAnimationGraphManager::Activate);
+			REL::Relocation<func_t> func{ REL::ID(950096) };
+			return func(this);
+		}
+		bool Deactivate() {
+			using func_t = decltype(&RE::BSAnimationGraphManager::Deactivate);
+			REL::Relocation<func_t> func{ REL::ID(591084) };
+			return func(this);
+		}
+	};
+
+	class TESObjectREFREx : public TESObjectREFR {
+	public:
+		void RebuildBendableSpline(bool rebuildCollision, NiAVObject* target) {
+			using func_t = decltype(&RE::TESObjectREFREx::RebuildBendableSpline);
+			REL::Relocation<func_t> func{ REL::ID(340319) };
+			return func(this, rebuildCollision, target);
+		}
+
+		void SetLocationOnReference(const NiPoint3& pos) {
+			using func_t = decltype(&RE::TESObjectREFREx::SetLocationOnReference);
+			REL::Relocation<func_t> func{ REL::ID(1101832) };
+			return func(this, pos);
+		}
+
+		void SetAngleOnReference(const NiPoint3& ang) {
+			using func_t = decltype(&RE::TESObjectREFREx::SetAngleOnReference);
+			REL::Relocation<func_t> func{ REL::ID(1049748) };
+			return func(this, ang);
+		}
+
+		bool GetItemCount(uint32_t& count, TESForm* item, bool countComponent) {
+			using func_t = decltype(&RE::TESObjectREFREx::GetItemCount);
+			REL::Relocation<func_t> func{ REL::ID(635042) };
+			return func(this, count, item, countComponent);
+		}
+
+		void UpdateReference3D() {
+			using func_t = decltype(&RE::TESObjectREFREx::UpdateReference3D);
+			REL::Relocation<func_t> func{ REL::ID(1568075) };
+			return func(this);
+		}
+
+		void GetObjectCenter(NiPoint3& center) {
+			using func_t = decltype(&RE::TESObjectREFREx::GetObjectCenter);
+			REL::Relocation<func_t> func{ REL::ID(777738) };
+			return func(this, center);
+		}
+
+		void SetScale(float scale) {
+			using func_t = decltype(&RE::TESObjectREFREx::SetScale);
+			REL::Relocation<func_t> func{ REL::ID(817930) };
+			return func(this, scale);
+		}
+	};
+
+	class TESObjectCELLEx : public TESObjectCELL {
+	public:
+		NiAVObject* Pick(F4::bhkPickData& pd) {
+			using func_t = decltype(&RE::TESObjectCELLEx::Pick);
+			REL::Relocation<func_t> func{ REL::ID(434717) };
+			return func(this, pd);
+		}
+	};
+
+	class ActorEx : public Actor {
+	public:
+		void GetAimVector(NiPoint3& out) {
+			using func_t = decltype(&RE::ActorEx::GetAimVector);
+			REL::Relocation<func_t> func{ REL::ID(554863) };
+			return func(this, out);
+		}
+
+		uint32_t GetCurrentCollisionGroup() {
+			using func_t = decltype(&RE::ActorEx::GetCurrentCollisionGroup);
+			REL::Relocation<func_t> func{ REL::ID(410500) };
+			return func(this);
+		}
+
+		CFilter GetCollisionFilter() {
+			using func_t = decltype(&RE::ActorEx::GetCollisionFilter);
+			REL::Relocation<func_t> func{ REL::ID(1474995) };
+			return func(this);
+		}
+
+		bool GetCurrentFireLocation(BGSEquipIndex index, NiPoint3& out) {
+			using func_t = decltype(&RE::ActorEx::GetCurrentFireLocation);
+			REL::Relocation<func_t> func{ REL::ID(663107) };
+			return func(this, index, out);
+		}
+
+		float GetDesiredSpeed() {
+			using func_t = decltype(&RE::ActorEx::GetDesiredSpeed);
+			REL::Relocation<func_t> func{ REL::ID(106892) };
+			return func(this);
+		}
+
+		NiAVObject* GetClosestBone(NiPoint3 pos, NiPoint3 dir) {
+			using func_t = decltype(&RE::ActorEx::GetClosestBone);
+			REL::Relocation<func_t> func{ REL::ID(1180004) };
+			return func(this, pos, dir);
+		}
+
+		bhkCharacterController* Move(float deltaTime, NiPoint3 deltaPos, bool unk) {
+			using func_t = decltype(&RE::ActorEx::Move);
+			REL::Relocation<func_t> func{ REL::ID(737625) };
+			return func(this, deltaTime, deltaPos, unk);
+		}
+	};
+
+	namespace BGSCharacterTint {
+		class Entries {
+		public:
+			void Clear() {
+				using func_t = decltype(&RE::BGSCharacterTint::Entries::Clear);
+				REL::Relocation<func_t> func{ REL::ID(1146439) };
+				return func(this);
+			}
+		};
+	}
+
+	namespace BGSMod {
+		namespace Attachment {
+			class ModEx : public Mod {
+			public:
+				TESObjectMISC* GetLooseMod() {
+					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::GetLooseMod);
+					REL::Relocation<func_t> func{ REL::ID(1359613) };
+					return func(this);
+				}
+				void SetLooseMod(TESObjectMISC* misc) {
+					using func_t = decltype(&RE::BGSMod::Attachment::ModEx::SetLooseMod);
+					REL::Relocation<func_t> func{ REL::ID(123132) };
+					return func(this, misc);
+				}
+			};
+		}
+	}
+
+	class BGSObjectInstanceExtraEx : public BGSObjectInstanceExtra {
+	public:
+		static bool AttachModToReference(TESObjectREFR& ref, BGSMod::Attachment::Mod& mod, std::uint8_t a_attachIndex, std::uint8_t a_rank) {
+			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::AttachModToReference);
+			REL::Relocation<func_t> func{ REL::ID(3303) };
+			return func(ref, mod, a_attachIndex, a_rank);
+		}
+
+		bool HasMod(const BGSMod::Attachment::Mod& mod) {
+			using func_t = decltype(&RE::BGSObjectInstanceExtraEx::HasMod);
+			REL::Relocation<func_t> func{ REL::ID(963890) };
+			return func(this, mod);
+		}
+	};
+
+	class BGSProjectileEx : public BGSProjectile {
+	public:
+		bool CollidesWithSmallTransparentLayer() {
+			using func_t = decltype(&RE::BGSProjectileEx::CollidesWithSmallTransparentLayer);
+			REL::Relocation<func_t> func{ REL::ID(1115694) };
+			return func(this);
+		}
+	};
+
+	class NiPoint3Ex : public NiPoint3 {
+	public:
+		float GetZAngleFromVector() {
+			using func_t = decltype(&RE::NiPoint3Ex::GetZAngleFromVector);
+			REL::Relocation<func_t> func{ REL::ID(1450064) };
+			return func(this);
+		}
+	};
+
+	class NiCloningProcess {
+	public:
+		BSTHashMap<void*, void*>	unk00;	// 00
+		void* unk30;	// 30
+		uint64_t		unk38;		// 38
+		uint64_t		unk40;		// 40
+		void* unk48;	// 48 - DEADBEEF
+		void* unk50;	// 50 - bucket
+		uint64_t		unk58;		// 58
+		uint32_t		unk60;		// 60 - copytype? 0, 1, 2
+		uint32_t		unk64;		// 64
+	};
+
+	class NiStringExtraData : public NiExtraData {
+	public:
+		static constexpr auto RTTI{ RTTI::NiStringExtraData };
+		static constexpr auto VTABLE{ VTABLE::NiStringExtraData };
+		static constexpr auto Ni_RTTI{ Ni_RTTI::NiStringExtraData };
+
+		BSFixedString data;			//0x18
+
+	};
+
+	struct ActorEquipManagerEvent::Event {
+		uint32_t unk00;				//00
+		uint8_t pad04[0x7 - 0x4];	//04
+		bool isUnequip;				//07
+		void* unk08;				//08	
+		Actor* a;					//10	equip target
+	};
+
+	struct TESObjectLoadedEvent {
+		uint32_t formId;			//00
+		uint8_t loaded;				//08
+	};
+
+	struct TESEquipEvent {
+		Actor* a;
+		uint32_t formId;
+		uint32_t refFormID;
+		uint16_t unk10;
+		bool isEquip;
+	};
+
+	struct PlayerAmmoCountEvent {
+		uint32_t current;
+		uint32_t total;
+	};
+
+	struct BSTransformDeltaEvent {
+		NiMatrix3 deltaRotation;
+		NiPoint4 deltaTranslation;
+		NiPoint4 previousTranslation;
+		NiPoint4 previousRotation;
+		NiPoint4 previousScale;
+		NiPoint4 currentTranslation;
+		NiPoint4 currentRotation;
+		NiPoint4 currentScale;
+	};
+
+	struct TESLoadGameEvent {};
+
+	class HitEventSource : public BSTEventSource<TESHitEvent> {
+	public:
+		[[nodiscard]] static HitEventSource* GetSingleton() {
+			REL::Relocation<HitEventSource*> singleton{ REL::ID(989868) };
+			return singleton.get();
+		}
+	};
+
+	class ObjectLoadedEventSource : public BSTEventSource<TESObjectLoadedEvent> {
+	public:
+		[[nodiscard]] static ObjectLoadedEventSource* GetSingleton() {
+			REL::Relocation<ObjectLoadedEventSource*> singleton{ REL::ID(416662) };
+			return singleton.get();
+		}
+	};
+
+	class EquipEventSource : public BSTEventSource<TESEquipEvent> {
+	public:
+		[[nodiscard]] static EquipEventSource* GetSingleton() {
+			REL::Relocation<EquipEventSource*> singleton{ REL::ID(485633) };
+			return singleton.get();
+		}
+	};
+
+	class MGEFApplyEventSource : public BSTEventSource<TESMagicEffectApplyEvent> {
+	public:
+		[[nodiscard]] static MGEFApplyEventSource* GetSingleton() {
+			REL::Relocation<MGEFApplyEventSource*> singleton{ REL::ID(1481228) };
+			return singleton.get();
+		}
+	};
+
+	namespace LoadGameEventSource {
+		[[nodiscard]] BSTEventSource<TESLoadGameEvent>* GetSingleton() {
+			using func_t = decltype(&RE::LoadGameEventSource::GetSingleton);
+			REL::Relocation<func_t> func{ REL::ID(823570) };
+			return func();
+		}
+	};
+
+	BSLightingShaderProperty* FindPerPixelLighting(NiNode* node) {
+		using func_t = decltype(&RE::FindPerPixelLighting);
+		REL::Relocation<func_t> func{ REL::ID(1287682) };
+		return func(node);
+	}
+
+	struct DamageImpactData {
+		NiPoint4 hitPos;
+		NiPoint4 hitDirection;
+		NiPoint4 projectileDir;
+		bhkNPCollisionObject* collisionObj;
+	};
+	static_assert(sizeof(DamageImpactData) == 0x38);
+
+	struct VATSCommand;
+	class HitData {
+	public:
+		void SetAllDamageToZero() {
+			flags &= 0xFFFFFE07;
+			calculatedBaseDamage = 0.f;
+			blockedDamage = 0.f;
+			reducedDamage = 0.f;
+			blockStaggerMult = 0.f;
+		}
+
+		DamageImpactData impactData;
+		int8_t gap38[8];
+		ObjectRefHandle attackerHandle;
+		ObjectRefHandle victimHandle;
+		ObjectRefHandle sourceHandle;
+		int8_t gap4C[4];
+		BGSAttackData* attackData;
+		BGSObjectInstance source;
+		MagicItem* effect;
+		SpellItem* spellItem;
+		VATSCommand* VATSCommand;
+		TESAmmo* ammo;
+		BSTArray<BSTTuple<TESForm*, BGSTypedFormValuePair::SharedVal>>* damageTypes;
+		float calculatedBaseDamage;
+		float baseDamage;
+		float totalDamage;
+		float blockedDamage;
+		float blockMult;
+		float reducedDamage;
+		float field_A8;
+		float blockStaggerMult;
+		float sneakAttackMult;
+		float field_B4;
+		float field_B8;
+		float field_BC;
+		float criticalDamageMult;
+		uint32_t flags;
+		BGSEquipIndex equipIndex;
+		uint32_t materialType;
+		int32_t bodypartType;
+		int8_t gapD4[4];
+	};
+	static_assert(sizeof(HitData) == 0xD8);
+
+	class TESHitEvent {
+	public:
+		HitData hitdata;
+		int8_t gapD8[8];
+		TESObjectREFR* victim;
+		TESObjectREFR* attacker;
+		BSFixedString matName;
+		uint32_t sourceFormID;
+		uint32_t projFormID;
+		bool hasHitData;
+		int8_t gapD1[7];
+	};
+	static_assert(sizeof(TESHitEvent) == 0x108);
+
+	namespace GameScript {
+		void PostModifyInventoryItemMod(TESObjectREFR* container, TESBoundObject* item, bool reEquip) {
+			using func_t = decltype(&RE::GameScript::PostModifyInventoryItemMod);
+			REL::Relocation<func_t> func{ REL::ID(1153963) };
+			return func(container, item, reEquip);
+		}
+	}
 }
 
 char tempbuf[512] = { 0 };
@@ -1203,6 +1234,44 @@ std::string SplitString(const std::string str, const std::string delimiter, std:
 	return ret;
 }
 
+void SetupFilter(F4::bhkPickData& pick, Actor* a, BGSProjectile* projForm, bool excludeActor) {
+	uint32_t index = 6;
+	uint64_t flag = 0x1C15160;
+	if (projForm && projForm->data.collisionLayer) {
+		index = projForm->data.collisionLayer->collisionIdx;
+		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
+			flag = 0x15C15160;
+	}
+	uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
+	*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
+	uint32_t collisionGroup = 6;
+	if (excludeActor && a->loadedData && (*(BYTE*)((uintptr_t)a->loadedData + 0x20) & 0x1)) {
+		collisionGroup = ((ActorEx*)a)->GetCurrentCollisionGroup();
+	}
+	*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((collisionGroup << 16) | 0x29);
+}
+
+NiAVObject* GetPickDataCELL(const NiPoint3& start, const NiPoint3& end, Actor* a, F4::bhkPickData& pick, bool excludeActor = true) {
+	if (!a->parentCell)
+		return nullptr;
+	bhkWorld* world = a->parentCell->GetbhkWorld();
+	if (!world)
+		return nullptr;
+	hknpBSWorld* hkWorld = *(hknpBSWorld**)((uintptr_t)world + 0x60);
+	if (!hkWorld)
+		return nullptr;
+
+	pick.SetStartEnd(start, end);
+	SetupFilter(pick, a, nullptr, excludeActor);
+	return ((TESObjectCELLEx*)a->parentCell)->Pick(pick);
+}
+
+NiAVObject* GetPickDataTES(const NiPoint3& start, const NiPoint3& end, Actor* a, F4::bhkPickData& pick, bool excludeActor = true) {
+	pick.SetStartEnd(start, end);
+	SetupFilter(pick, a, nullptr, excludeActor);
+	return F4::ptr_TES->Pick(pick);
+}
+
 bool GetPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick, bool excludeActor = true) {
 	if (!a->parentCell)
 		return false;
@@ -1213,30 +1282,12 @@ bool GetPickData(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjec
 	if (!hkWorld)
 		return false;
 
-	bool ret = false;
 	pick.SetStartEnd(start, end);
-	/*hknpAllHitsCollector collector = hknpAllHitsCollector();
-	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
-	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;*/
 	hknpClosestHitCollector collector = hknpClosestHitCollector();
 	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
 	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 3;
-	uint32_t index = 6;
-	uint64_t flag = 0x1C15160;
-	if (projForm && projForm->data.collisionLayer) {
-		index = projForm->data.collisionLayer->collisionIdx;
-		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
-			flag = 0x15C15160;
-	}
-	uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
-	*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
-	if (excludeActor) {
-		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
-	}
-	hkWorld->MarkForRead();
-	ret = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
-	hkWorld->UnmarkForRead();
-	return ret;
+	SetupFilter(pick, a, projForm, excludeActor);
+	return F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
 }
 
 bool GetPickDataAll(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSProjectile* projForm, F4::bhkPickData& pick, bool excludeActor = true) {
@@ -1249,30 +1300,12 @@ bool GetPickDataAll(const NiPoint3& start, const NiPoint3& end, Actor* a, BGSPro
 	if (!hkWorld)
 		return false;
 
-	bool ret = false;
 	pick.SetStartEnd(start, end);
 	hknpAllHitsCollector collector = hknpAllHitsCollector();
 	*(uintptr_t*)((uintptr_t)&pick + 0xD0) = (uintptr_t)&collector;
 	*(uint32_t*)((uintptr_t)&pick + 0xD8) = 0;
-	uint32_t index = 6;
-	uint64_t flag = 0x1C15160;
-	if (projForm && projForm->data.collisionLayer) {
-		index = projForm->data.collisionLayer->collisionIdx;
-		if (!((BGSProjectileEx*)projForm)->CollidesWithSmallTransparentLayer())
-			flag = 0x15C15160;
-	}
-	uint64_t filter = *(uint64_t*)((*REL::Relocation<uint64_t*>{ REL::ID(469495) }) + 0x1A0 + 0x8 * index) | 0x40000000;
-	*(uint64_t*)((uintptr_t)&pick + 0xC8) = filter & ~flag;
-	if (excludeActor) {
-		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
-	}
-	if (excludeActor) {
-		*(uint32_t*)((uintptr_t)&pick + 0x0C) = ((((ActorEx*)a)->GetCurrentCollisionGroup() << 16) | 0x1);
-	}
-	hkWorld->MarkForRead();
-	ret = F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
-	hkWorld->UnmarkForRead();
-	return ret;
+	SetupFilter(pick, a, projForm, excludeActor);
+	return F4::CombatUtilities::CalculateProjectileLOS(a, projForm, pick);
 }
 
 #pragma endregion
