@@ -12,6 +12,7 @@
     "boost-regex",
     "boost-stl-interfaces",
     "boost-test",
+    "catch2",
     "fmt",
     "frozen",
     "robin-hood-hashing",
