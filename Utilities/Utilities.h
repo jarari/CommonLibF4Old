@@ -332,8 +332,8 @@ namespace F4 {
 			return func(pos, vel, gravity, targetPos, X, out);
 		}
 
-		inline bool CalculateProjectileLOS(Actor* a, BGSProjectile* proj, float speed, const NiPoint3* launchPos, const NiPoint3* targetPos, NiPoint3* hitPos, TESObjectREFR** collidee, float* dist) {
-			typedef bool func_t(Actor*, BGSProjectile*, float, const NiPoint3*, const NiPoint3*, NiPoint3*, TESObjectREFR**, float*);
+		inline bool CalculateProjectileLOS(Actor* a, BGSProjectile* proj, float speed, const NiPoint3& launchPos, const NiPoint3& targetPos, NiPoint3* hitPos, TESObjectREFR** collidee, float* dist) {
+			typedef bool func_t(Actor*, BGSProjectile*, float, const NiPoint3&, const NiPoint3&, NiPoint3*, TESObjectREFR**, float*);
 			REL::Relocation<func_t> func{ REL::ID(798616) };
 			return func(a, proj, speed, launchPos, targetPos, hitPos, collidee, dist);
 		}
@@ -1143,6 +1143,10 @@ bool CheckPA(Actor* a) {
 		return false;
 	}
 	return a->extraList->HasType(EXTRA_DATA_TYPE::kPowerArmor);;
+}
+
+bool GetIsSighted(Actor* a) {
+	return (a->gunState == GUN_STATE::kSighted || a->gunState == GUN_STATE::kFireSighted);
 }
 
 float GetActorScale(Actor* a) {
