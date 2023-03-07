@@ -9,7 +9,7 @@
 using RE::NiMatrix3;
 using RE::NiPoint3;
 
-float toRad = (float)(MATH_PI / 180.0);
+const static float toRad = (float)(MATH_PI / 180.0);
 struct Quaternion {
 public:
 	float x, y, z, w;
