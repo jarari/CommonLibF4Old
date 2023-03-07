@@ -346,6 +346,13 @@ namespace RE
 		};
 		static_assert(sizeof(HeadRelatedData) == 0x18);
 
+		[[nodiscard]] static TESNPC* GetDefaultNPC(TESNPC* npc)
+		{
+			using func_t = decltype(&TESNPC::GetDefaultNPC);
+			REL::Relocation<func_t> func{ REL::ID(1073775) };
+			return func(npc);
+		}
+
 		[[nodiscard]] static BSTHashMap<const TESNPC*, BSTArray<BGSHeadPart*>>& GetAlternateHeadPartListMap()
 		{
 			REL::Relocation<BSTHashMap<const TESNPC*, BSTArray<BGSHeadPart*>>*> map{ REL::ID(1306546), -0x8 };
@@ -381,7 +388,8 @@ namespace RE
 			return root;
 		}
 
-		[[nodiscard]] uint32_t GetSex() noexcept {
+		[[nodiscard]] uint32_t GetSex() noexcept
+		{
 			using func_t = decltype(&TESNPC::GetSex);
 			REL::Relocation<func_t> func{ REL::ID(1257181) };
 			return func(this);
